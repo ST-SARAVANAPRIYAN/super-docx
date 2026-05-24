@@ -302,165 +302,165 @@
 	window.Asc.plugin.init = function() {
 		log('Groq AI Copilot v3 PDK initialized.', 'success');
 		loadSettings();
-
-		// Bind Undo / Redo toolbar events
-		toolbarUndo.addEventListener('click', () => {
-			window.Asc.plugin.executeMethod("Undo", [], () => {
-				log("Executed document Undo successfully.", "info");
-			});
-		});
-
-		toolbarRedo.addEventListener('click', () => {
-			window.Asc.plugin.executeMethod("Redo", [], () => {
-				log("Executed document Redo successfully.", "info");
-			});
-		});
-
-		// Bind chip-summarize click event
-		chipSummarize.addEventListener('click', async () => {
-			const apiKey = apiKeyInput.value.trim();
-			if (!apiKey) {
-				log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
-				tabSettings.click();
-				return;
-			}
-			setLoading(true);
-			log(`Summarizing document range [${scanRange === 'select' ? 'Selection Only' : 'Entire Document'}]...`, 'info');
-
-			try {
-				let docJSON = "";
-				if (scanRange === "select") {
-					docJSON = await serializeSelection();
-				} else {
-					docJSON = await serializeDocument();
-				}
-				
-				const parsed = JSON.parse(docJSON);
-				
-				const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-					method: 'POST',
-					headers: {
-						'Authorization': `Bearer ${apiKey}`,
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({
-						model: modelSelect.value,
-						messages: [
-							{
-								role: 'system',
-								content: "You are an expert executive summary agent. Analyze the provided text and document structure and return an extremely high-quality summary in 3 to 5 concise bullet points. Format the output directly as clean plain text bullet points starting with standard dash '-' prefixes. Do not return any JSON or markdown blocks."
-							},
-							{
-								role: 'user',
-								content: `Document data: ${JSON.stringify(parsed)}`
-							}
-						],
-						temperature: 0.2
-					})
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}`);
-				}
-
-				const data = await response.json();
-				activeSummaryContent = data.choices[0].message.content.trim();
-				
-				summaryText.innerText = activeSummaryContent;
-				summaryCard.style.display = 'block';
-				log("Executive summary compiled successfully by Groq AI!", "success");
-			} catch (err) {
-				log(`Summarization failed: ${err.message}`, 'error');
-			} finally {
-				setLoading(false);
-			}
-		});
-
-		// Insert Summary button click event
-		insertSummaryBtn.addEventListener('click', () => {
-			if (!activeSummaryContent) return;
-			log("Inserting summary directly at active cursor selection...", "info");
-
-			window.Asc.scope.summaryText = "\n\n" + activeSummaryContent + "\n\n";
-			window.Asc.plugin.callCommand(function() {
-				var oDocument = Api.GetDocument();
-				var oParagraph = Api.CreateParagraph();
-				oParagraph.AddText(Asc.scope.summaryText);
-				oDocument.InsertContent([oParagraph]);
-				return "success";
-			}, false, true, function(res) {
-				log("Summary successfully inserted into document!", "success");
-				summaryCard.style.display = 'none';
-			});
-		});
-
-		// Click run button
-		executeBtn.addEventListener('click', async () => {
-			const apiKey = apiKeyInput.value.trim();
-			const prompt = promptInput.value.trim();
-
-			if (!apiKey) {
-				log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
-				tabSettings.click();
-				return;
-			}
-			if (!prompt) {
-				log('Error: Prompt cannot be empty.', 'error');
-				return;
-			}
-
-			setLoading(true);
-			log(`Scanning active range [${scanRange === 'select' ? 'Selection' : 'Entire Document'}] structure and elements...`, 'info');
-
-			try {
-				let docJSON = "";
-				if (scanRange === "select") {
-					docJSON = await serializeSelection();
-				} else {
-					docJSON = await serializeDocument();
-				}
-				
-				cachedDocData = JSON.parse(docJSON);
-				
-				let totalElements = 0;
-				cachedDocData.sections.forEach(s => {
-					totalElements += s.elements.length;
-				});
-
-				log(`Successfully scanned ${cachedDocData.sections.length} sections containing ${totalElements} elements.`, 'success');
-				log(`Contacting Groq endpoint [api.groq.com/openai/v1] using model: ${modelSelect.value}...`, 'info');
-				
-				const aiResponse = await queryGroqAPI(apiKey, modelSelect.value, cachedDocData, prompt, scanRange === "select");
-				
-				log('Received secure API response from Groq.', 'success');
-				
-				proposedChanges = parseAIResponse(aiResponse);
-				
-				if (!proposedChanges || proposedChanges.length === 0) {
-					log('Analysis complete: No style or content changes suggested for this request.', 'warning');
-					changesCard.style.display = 'none';
-				} else {
-					log(`Successfully decoded ${proposedChanges.length} autonomous formatting instructions.`, 'success');
-					renderPreview(proposedChanges);
-				}
-
-			} catch (err) {
-				log(`Execution Error: ${err.message}`, 'error');
-				console.error(err);
-			} finally {
-				setLoading(false);
-			}
-		});
-
-		// Confirm button click - executes sequentially and animated
-		confirmBtn.addEventListener('click', () => {
-			if (!proposedChanges || proposedChanges.length === 0) return;
-			
-			log('Starting animated autonomous editing workflow...', 'info');
-			changesCard.style.display = 'none';
-			executeSequentialEdits(proposedChanges);
-		});
 	};
+
+	// Bind Undo / Redo toolbar events
+	toolbarUndo.addEventListener('click', () => {
+		window.Asc.plugin.executeMethod("Undo", [], () => {
+			log("Executed document Undo successfully.", "info");
+		});
+	});
+
+	toolbarRedo.addEventListener('click', () => {
+		window.Asc.plugin.executeMethod("Redo", [], () => {
+			log("Executed document Redo successfully.", "info");
+		});
+	});
+
+	// Bind chip-summarize click event
+	chipSummarize.addEventListener('click', async () => {
+		const apiKey = apiKeyInput.value.trim();
+		if (!apiKey) {
+			log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
+			tabSettings.click();
+			return;
+		}
+		setLoading(true);
+		log(`Summarizing document range [${scanRange === 'select' ? 'Selection Only' : 'Entire Document'}]...`, 'info');
+
+		try {
+			let docJSON = "";
+			if (scanRange === "select") {
+				docJSON = await serializeSelection();
+			} else {
+				docJSON = await serializeDocument();
+			}
+			
+			const parsed = JSON.parse(docJSON);
+			
+			const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					model: modelSelect.value,
+					messages: [
+						{
+							role: 'system',
+							content: "You are an expert executive summary agent. Analyze the provided text and document structure and return an extremely high-quality summary in 3 to 5 concise bullet points. Format the output directly as clean plain text bullet points starting with standard dash '-' prefixes. Do not return any JSON or markdown blocks."
+						},
+						{
+							role: 'user',
+							content: `Document data: ${JSON.stringify(parsed)}`
+						}
+					],
+					temperature: 0.2
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}`);
+			}
+
+			const data = await response.json();
+			activeSummaryContent = data.choices[0].message.content.trim();
+			
+			summaryText.innerText = activeSummaryContent;
+			summaryCard.style.display = 'block';
+			log("Executive summary compiled successfully by Groq AI!", "success");
+		} catch (err) {
+			log(`Summarization failed: ${err.message}`, 'error');
+		} finally {
+			setLoading(false);
+		}
+	});
+
+	// Insert Summary button click event
+	insertSummaryBtn.addEventListener('click', () => {
+		if (!activeSummaryContent) return;
+		log("Inserting summary directly at active cursor selection...", "info");
+
+		window.Asc.scope.summaryText = "\n\n" + activeSummaryContent + "\n\n";
+		window.Asc.plugin.callCommand(function() {
+			var oDocument = Api.GetDocument();
+			var oParagraph = Api.CreateParagraph();
+			oParagraph.AddText(Asc.scope.summaryText);
+			oDocument.InsertContent([oParagraph]);
+			return "success";
+		}, false, true, function(res) {
+			log("Summary successfully inserted into document!", "success");
+			summaryCard.style.display = 'none';
+		});
+	});
+
+	// Click run button
+	executeBtn.addEventListener('click', async () => {
+		const apiKey = apiKeyInput.value.trim();
+		const prompt = promptInput.value.trim();
+
+		if (!apiKey) {
+			log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
+			tabSettings.click();
+			return;
+		}
+		if (!prompt) {
+			log('Error: Prompt cannot be empty.', 'error');
+			return;
+		}
+
+		setLoading(true);
+		log(`Scanning active range [${scanRange === 'select' ? 'Selection' : 'Entire Document'}] structure and elements...`, 'info');
+
+		try {
+			let docJSON = "";
+			if (scanRange === "select") {
+				docJSON = await serializeSelection();
+			} else {
+				docJSON = await serializeDocument();
+			}
+			
+			cachedDocData = JSON.parse(docJSON);
+			
+			let totalElements = 0;
+			cachedDocData.sections.forEach(s => {
+				totalElements += s.elements.length;
+			});
+
+			log(`Successfully scanned ${cachedDocData.sections.length} sections containing ${totalElements} elements.`, 'success');
+			log(`Contacting Groq endpoint [api.groq.com/openai/v1] using model: ${modelSelect.value}...`, 'info');
+			
+			const aiResponse = await queryGroqAPI(apiKey, modelSelect.value, cachedDocData, prompt, scanRange === "select");
+			
+			log('Received secure API response from Groq.', 'success');
+			
+			proposedChanges = parseAIResponse(aiResponse);
+			
+			if (!proposedChanges || proposedChanges.length === 0) {
+				log('Analysis complete: No style or content changes suggested for this request.', 'warning');
+				changesCard.style.display = 'none';
+			} else {
+				log(`Successfully decoded ${proposedChanges.length} autonomous formatting instructions.`, 'success');
+				renderPreview(proposedChanges);
+			}
+
+		} catch (err) {
+			log(`Execution Error: ${err.message}`, 'error');
+			console.error(err);
+		} finally {
+			setLoading(false);
+		}
+	});
+
+	// Confirm button click - executes sequentially and animated
+	confirmBtn.addEventListener('click', () => {
+		if (!proposedChanges || proposedChanges.length === 0) return;
+		
+		log('Starting animated autonomous editing workflow...', 'info');
+		changesCard.style.display = 'none';
+		executeSequentialEdits(proposedChanges);
+	});
 
 	window.Asc.plugin.button = function(id) {
 		this.executeCommand("close", "");
