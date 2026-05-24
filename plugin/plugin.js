@@ -490,6 +490,55 @@
 		}
 	}
 
+	// Helper to extract runs with nested bold/italic/color/font properties inside any paragraph
+	function serializeRuns(oElement) {
+		var runsData = [];
+		try {
+			var aRuns = oElement.GetElements();
+			if (aRuns && aRuns.length > 0) {
+				for (var r = 0; r < aRuns.length; r++) {
+					var oRun = aRuns[r];
+					if (oRun && oRun.GetClassType() === "run") {
+						var rText = oRun.GetText() || "";
+						if (rText === "") continue;
+						
+						var rFontName = "Calibri";
+						var rFontSize = 22;
+						var rBold = false;
+						var rItalic = false;
+						var rColor = "#000000";
+						
+						try { if (oRun.GetFontName) rFontName = oRun.GetFontName() || rFontName; } catch(e) {}
+						try { if (oRun.GetFontSize) rFontSize = oRun.GetFontSize() || rFontSize; } catch(e) {}
+						try { if (oRun.GetBold) rBold = oRun.GetBold() || rBold; } catch(e) {}
+						try { if (oRun.GetItalic) rItalic = oRun.GetItalic() || rItalic; } catch(e) {}
+						try {
+							if (oRun.GetColor) {
+								var c = oRun.GetColor();
+								if (c && c.GetHex) {
+									var hexVal = c.GetHex();
+									if (hexVal) rColor = hexVal;
+								}
+							}
+						} catch(e) {}
+						
+						runsData.push({
+							text: rText,
+							style: {
+								fontName: rFontName,
+								fontSize: rFontSize / 2,
+								bold: rBold,
+								italic: rItalic,
+								color: rColor
+							}
+						});
+					}
+				}
+			}
+		} catch(e) {}
+		return runsData;
+	}
+
 	// Dynamic selection text/range serializer with absolute document mapping
 	function serializeSelection() {
 		return new Promise((resolve, reject) => {
@@ -524,9 +573,15 @@
 						var isMatched = false;
 						for (var j = 0; j < selectedLines.length; j++) {
 							var cleanSel = selectedLines[j].trim();
-							if (cleanSel.length > 0 && (cleanPText.indexOf(cleanSel) !== -1 || cleanSel.indexOf(cleanPText) !== -1)) {
-								isMatched = true;
-								break;
+							if (cleanSel.length > 0) {
+								if (cleanPText === cleanSel || cleanPText.indexOf(cleanSel) !== -1 || cleanSel.indexOf(cleanPText) !== -1) {
+									// Enforce exact match check on short text selections to avoid stop words matching
+									if (cleanSel.length < 5 && cleanPText !== cleanSel) {
+										continue;
+									}
+									isMatched = true;
+									break;
+								}
 							}
 						}
 						
@@ -568,6 +623,7 @@
 								type: "paragraph",
 								index: i, // Real Absolute Document Index!
 								text: pText,
+								runs: serializeRuns(oElement),
 								style: {
 									fontName: oFontName,
 									fontSize: oFontSize / 2,
@@ -713,6 +769,7 @@
 								type: "paragraph",
 								index: i,
 								text: oText,
+								runs: serializeRuns(oElement),
 								style: {
 									fontName: oFontName,
 									fontSize: oFontSize / 2, // Standardize to human points
@@ -1013,28 +1070,78 @@ User Request:
 						var originalText = oParagraph.GetText() || "";
 						var activeText = oProps.newText !== undefined ? oProps.newText : originalText;
 						
-						oParagraph.RemoveAllElements();
-						var oRun = oParagraph.AddText(activeText);
+						// Extract original styles before modification to preserve them
+						var origFont = "Calibri";
+						var origSize = 22;
+						var origBold = false;
+						var origItalic = false;
+						var origColorHex = "#000000";
 						
-						if (oRun) {
-							if (oProps.fontName) oRun.SetFontName(oProps.fontName);
-							// ONLYOFFICE FontSize is specified in half-points (e.g. 11pt = 22)
-							if (oProps.fontSize) oRun.SetFontSize(oProps.fontSize);
-							if (oProps.bold !== undefined) oRun.SetBold(oProps.bold);
-							if (oProps.italic !== undefined) oRun.SetItalic(oProps.italic);
+						try {
+							var aRuns = oParagraph.GetElements();
+							if (aRuns && aRuns.length > 0) {
+								var firstRun = aRuns[0];
+								if (firstRun) {
+									if (firstRun.GetFontName) origFont = firstRun.GetFontName() || origFont;
+									if (firstRun.GetFontSize) origSize = firstRun.GetFontSize() || origSize;
+									if (firstRun.GetBold) origBold = firstRun.GetBold() || origBold;
+									if (firstRun.GetItalic) origItalic = firstRun.GetItalic() || origItalic;
+									if (firstRun.GetColor) {
+										var c = firstRun.GetColor();
+										if (c && c.GetHex) origColorHex = c.GetHex() || origColorHex;
+									}
+								}
+							}
+						} catch(e) {}
+
+						if (oProps.newText !== undefined) {
+							// Content actually changed, so rewrite text
+							oParagraph.RemoveAllElements();
+							var oRun = oParagraph.AddText(activeText);
 							
-							if (oProps.color) {
-								var hex = oProps.color.replace('#', '');
+							if (oRun) {
+								// Format with proposed styles or fallback to original styles to preserve them!
+								oRun.SetFontName(oProps.fontName || origFont);
+								oRun.SetFontSize(oProps.fontSize || origSize);
+								oRun.SetBold(oProps.bold !== undefined ? oProps.bold : origBold);
+								oRun.SetItalic(oProps.italic !== undefined ? oProps.italic : origItalic);
+								
+								var targetColor = oProps.color || origColorHex;
+								var hex = targetColor.replace('#', '');
 								if (hex.length === 6) {
 									var r = parseInt(hex.substring(0, 2), 16);
 									var g = parseInt(hex.substring(2, 4), 16);
 									var b = parseInt(hex.substring(4, 6), 16);
-									try {
-										oRun.SetColor(Api.CreateColorFromRGB(r, g, b));
-									} catch(eColor) {
-										try {
-											oRun.SetColor(r, g, b);
-										} catch(errHex) {}
+									try { oRun.SetColor(Api.CreateColorFromRGB(r, g, b)); } catch(eColor) {
+										try { oRun.SetColor(r, g, b); } catch(errHex) {}
+									}
+								}
+							}
+						} else {
+							// Content did not change, so format ALL existing runs in place (preserving nested bold/italic/etc.)
+							var aRuns = oParagraph.GetElements();
+							for (var rIdx = 0; rIdx < aRuns.length; rIdx++) {
+								var oRun = aRuns[rIdx];
+								if (oRun && oRun.GetClassType() === "run") {
+									if (oProps.fontName) oRun.SetFontName(oProps.fontName);
+									if (oProps.fontSize) oRun.SetFontSize(oProps.fontSize);
+									if (oProps.bold !== undefined) oRun.SetBold(oProps.bold);
+									if (oProps.italic !== undefined) oRun.SetItalic(oProps.italic);
+									
+									if (oProps.color) {
+										var hex = oProps.color.replace('#', '');
+										if (hex.length === 6) {
+											var r = parseInt(hex.substring(0, 2), 16);
+											var g = parseInt(hex.substring(2, 4), 16);
+											var b = parseInt(hex.substring(4, 6), 16);
+											try {
+												oRun.SetColor(Api.CreateColorFromRGB(r, g, b));
+											} catch(eColor) {
+												try {
+													oRun.SetColor(r, g, b);
+												} catch(errHex) {}
+											}
+										}
 									}
 								}
 							}
