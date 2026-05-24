@@ -221,10 +221,10 @@
 
 						// Fallback defaults
 						var oFontName = "Calibri";
-						var oFontSize = 22; // 11pt
+						var oFontSize = 22; // 11pt in half-points
 						var oBold = false;
 						var oItalic = false;
-						var oColor = null;
+						var oColor = "#000000";
 
 						// Extract styling from runs inside the paragraph elements list
 						try {
@@ -240,7 +240,10 @@
 										if (oRun.GetItalic) oItalic = oRun.GetItalic() || oItalic;
 										if (oRun.GetColor) {
 											var c = oRun.GetColor();
-											if (c) oColor = c;
+											if (c && c.GetHex) {
+												var hexVal = c.GetHex();
+												if (hexVal) oColor = hexVal;
+											}
 										}
 										break; // Parse first style representation run
 									}
@@ -260,7 +263,7 @@
 							text: oText,
 							style: {
 								fontName: oFontName,
-								fontSize: oFontSize,
+								fontSize: oFontSize / 2, // Standardize to human points (e.g. 11pt instead of 22 half-points)
 								bold: oBold,
 								italic: oItalic,
 								alignment: oAlign,
@@ -286,25 +289,45 @@
 
 	// Query Groq API with robust schema
 	async function queryGroqAPI(apiKey, model, docData, prompt) {
-		const systemMessage = `You are a professional document typesetter and layout agent. Your task is to analyze the provided JSON representation of a document and generate the requested style or content changes as a valid JSON array of edit commands.
+		const systemMessage = `You are a professional document typesetter and layout agent. Your task is to analyze the provided JSON representation of a document and generate the requested style or content changes as a valid JSON object.
 		
-You must output a JSON array of change objects. Each object must have:
-- "action" (string): One of:
-    - "modifyStyle": Set fonts, size, spacing, bold, alignment, color, or text updates.
-    - "createParagraph": Create a new paragraph after the targetIndex.
-    - "deleteParagraph": Remove this paragraph from the document.
-- "targetIndex" (integer): The 0-based index of the paragraph to modify or delete, or insert AFTER.
-- "properties" (object): An object containing any of the styling updates:
-    - "fontName" (string, e.g. "Arial", "Georgia", "Inter", "Times New Roman")
-    - "fontSize" (integer, in half-points: 22 = 11pt, 24 = 12pt, 28 = 14pt, 32 = 16pt, 48 = 24pt)
-    - "bold" (boolean)
-    - "italic" (boolean)
-    - "color" (string hex code like "#1d4ed8" or "#dc2626")
-    - "alignment" (string: "left", "right", "center", "justify")
-    - "spacingAfter" (integer, in dxa: 120 = 6pt, 240 = 12pt, 360 = 18pt)
-    - "newText" (string, optional - only provide if content change or rewriting was requested by prompt)
+You must output a JSON object containing a "changes" key which holds an array of edit commands. Each edit command must have the following structure:
+{
+  "changes": [
+    {
+      "action": "modifyStyle",
+      "targetIndex": 0,
+      "properties": {
+        "fontName": "Arial",
+        "fontSize": 24,
+        "bold": true,
+        "italic": false,
+        "color": "#1d4ed8",
+        "alignment": "center",
+        "spacingAfter": 120,
+        "newText": "optional updated paragraph text"
+      }
+    }
+  ]
+}
 
-Respond ONLY with a valid JSON array. Do not include markdown code block formatting (like \`\`\`json).`;
+Available actions:
+- "modifyStyle": Set fonts, size, spacing, bold, alignment, color, or text updates.
+- "createParagraph": Create a new paragraph after the targetIndex.
+- "deleteParagraph": Remove this paragraph from the document.
+
+Formatting & units specifications:
+- "fontName" (string, e.g. "Arial", "Georgia", "Inter", "Times New Roman", "Courier New")
+- "fontSize" (integer): Must be in half-points (e.g., 22 for 11pt, 24 for 12pt, 28 for 14pt, 32 for 16pt, 48 for 24pt). The input document represents size in standard points, but you MUST write changes in half-points.
+- "bold" (boolean)
+- "italic" (boolean)
+- "color" (string hex code like "#1d4ed8" or "#ffff00")
+- "alignment" (string: "left", "right", "center", "justify")
+- "spacingAfter" (integer, in dxa: 120 = 6pt, 240 = 12pt, 360 = 18pt)
+- "newText" (string, optional - only provide if content change or rewriting was requested by prompt)
+
+If the user wants a global change (e.g. "change the entire font color to red", or "make everything Times New Roman"), you MUST generate "modifyStyle" commands for EVERY single paragraph index in the document.
+Respond ONLY with a valid JSON object. Do not include markdown code block formatting (like \`\`\`json).`;
 
 		const userMessage = `Current Document Structure:
 ${JSON.stringify(docData, null, 2)}
@@ -491,7 +514,13 @@ User Request:
 									var r = parseInt(hex.substring(0, 2), 16);
 									var g = parseInt(hex.substring(2, 4), 16);
 									var b = parseInt(hex.substring(4, 6), 16);
-									oRange.SetColor(r, g, b);
+									try {
+										oRange.SetColor(Api.CreateColorFromRGB(r, g, b));
+									} catch(eColor) {
+										try {
+											oRange.SetColor(r, g, b);
+										} catch(errHex) {}
+									}
 								}
 							}
 						}
