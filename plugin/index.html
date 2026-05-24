@@ -404,6 +404,7 @@
 		</div>
 		<div class="tabs">
 			<button class="tab-btn active" id="tab-prompt">Prompt</button>
+			<button class="tab-btn" id="tab-structure">Structure</button>
 			<button class="tab-btn" id="tab-settings">Settings</button>
 		</div>
 	</div>
@@ -447,6 +448,20 @@
 				<button class="btn" id="confirm-btn" style="background: var(--success); color: #fff; box-shadow: none;">
 					Apply Changes Autonomously
 				</button>
+			</div>
+		</div>
+
+		<!-- STRUCTURE VIEW PANE -->
+		<div class="view-pane" id="view-structure">
+			<div class="card" style="display: flex; flex-direction: column; flex: 1; min-height: 380px;">
+				<div class="log-header" style="margin-bottom: 8px;">
+					<div class="card-title" style="margin-bottom: 0;">Document JSON Structure</div>
+					<div style="display: flex; gap: 8px;">
+						<span class="toggle-settings" id="copy-structure" style="font-size: 10px; cursor: pointer; opacity: 0.8; user-select: none;">Copy JSON</span>
+						<span class="toggle-settings" id="refresh-structure" style="font-size: 10px; cursor: pointer; opacity: 0.8; user-select: none;">Refresh</span>
+					</div>
+				</div>
+				<textarea id="structure-json" style="flex: 1; height: 320px; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; background: rgba(8, 12, 21, 0.9); color: #bfdbfe; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; resize: none; overflow-y: auto;" readonly placeholder="Loading document structure..."></textarea>
 			</div>
 		</div>
 

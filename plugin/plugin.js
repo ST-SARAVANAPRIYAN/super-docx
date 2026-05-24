@@ -2,9 +2,16 @@
 
 	// Cache UI selectors
 	const tabPrompt = document.getElementById('tab-prompt');
+	const tabStructure = document.getElementById('tab-structure');
 	const tabSettings = document.getElementById('tab-settings');
+	
 	const viewPrompt = document.getElementById('view-prompt');
+	const viewStructure = document.getElementById('view-structure');
 	const viewSettings = document.getElementById('view-settings');
+	
+	const structureJson = document.getElementById('structure-json');
+	const copyStructure = document.getElementById('copy-structure');
+	const refreshStructure = document.getElementById('refresh-structure');
 
 	const apiKeyInput = document.getElementById('api-key');
 	const toggleKeyVisibility = document.getElementById('toggle-key-visibility');
@@ -27,16 +34,30 @@
 	// View Tabs Navigation
 	tabPrompt.addEventListener('click', () => {
 		tabPrompt.classList.add('active');
+		tabStructure.classList.remove('active');
 		tabSettings.classList.remove('active');
 		viewPrompt.classList.add('active');
+		viewStructure.classList.remove('active');
 		viewSettings.classList.remove('active');
+	});
+
+	tabStructure.addEventListener('click', () => {
+		tabStructure.classList.add('active');
+		tabPrompt.classList.remove('active');
+		tabSettings.classList.remove('active');
+		viewStructure.classList.add('active');
+		viewPrompt.classList.remove('active');
+		viewSettings.classList.remove('active');
+		refreshDocStructureView();
 	});
 
 	tabSettings.addEventListener('click', () => {
 		tabSettings.classList.add('active');
 		tabPrompt.classList.remove('active');
+		tabStructure.classList.remove('active');
 		viewSettings.classList.add('active');
 		viewPrompt.classList.remove('active');
+		viewStructure.classList.remove('active');
 	});
 
 	// API Key Visibility Toggle
@@ -115,9 +136,59 @@
 		logContainer.scrollTop = logContainer.scrollHeight;
 	}
 
+	// Dynamic Document JSON Viewer compiler
+	async function refreshDocStructureView() {
+		structureJson.value = "Scanning active document and compiling section-wise structure JSON...";
+		try {
+			const docJSON = await serializeDocument();
+			const parsed = JSON.parse(docJSON);
+			structureJson.value = JSON.stringify(parsed, null, 2);
+			log("Compiled page/section/table hierarchical document structure JSON successfully.", "success");
+		} catch(err) {
+			structureJson.value = "Error scanning document structure: " + err.message;
+			log("Error loading structure: " + err.message, "error");
+		}
+	}
+
+	// Copy document JSON structure
+	copyStructure.addEventListener('click', () => {
+		const txt = structureJson.value;
+		if (!txt || txt.startsWith("Scanning") || txt.startsWith("Error")) return;
+		
+		navigator.clipboard.writeText(txt).then(() => {
+			const originalText = copyStructure.innerText;
+			copyStructure.innerText = "Copied! ✓";
+			setTimeout(() => {
+				copyStructure.innerText = originalText;
+			}, 1500);
+			log("Copied structural document JSON to clipboard.", "success");
+		}).catch(() => {
+			log("Failed to copy JSON to clipboard.", "error");
+		});
+	});
+
+	// Refresh document JSON structure
+	refreshStructure.addEventListener('click', () => {
+		refreshDocStructureView();
+	});
+
+	// Helper to find document element by its absolute logical index inside our parsed structure
+	function findElementByIndex(index) {
+		if (!cachedDocData || !cachedDocData.sections) return null;
+		for (var s = 0; s < cachedDocData.sections.length; s++) {
+			var elements = cachedDocData.sections[s].elements;
+			for (var e = 0; e < elements.length; e++) {
+				if (elements[e].index === index) {
+					return elements[e];
+				}
+			}
+		}
+		return null;
+	}
+
 	// Initialize ONLYOFFICE plugin hooks
 	window.Asc.plugin.init = function() {
-		log('Groq AI Copilot v2 core initialized.', 'success');
+		log('Groq AI Copilot v2 PDK initialized.', 'success');
 		loadSettings();
 
 		// Click run button
@@ -143,7 +214,12 @@
 				const docJSON = await serializeDocument();
 				cachedDocData = JSON.parse(docJSON);
 				
-				log(`Successfully scanned ${cachedDocData.length} paragraphs.`, 'success');
+				let totalElements = 0;
+				cachedDocData.sections.forEach(s => {
+					totalElements += s.elements.length;
+				});
+
+				log(`Successfully scanned ${cachedDocData.sections.length} document sections containing ${totalElements} elements.`, 'success');
 				log(`Document sample structure compiled successfully. Payload characters: ${docJSON.length}`, 'info');
 
 				// Step 2: Query Groq completions API
@@ -197,7 +273,7 @@
 		}
 	}
 
-	// Document serialization
+	// Document serialization - compiles sections, headings, paragraphs, and tables
 	function serializeDocument() {
 		return new Promise((resolve, reject) => {
 			// Defensive timeout to prevent UI hanging if callCommand fails
@@ -207,75 +283,151 @@
 
 			window.Asc.plugin.callCommand(function() {
 				var oDocument = Api.GetDocument();
-				var aParagraphs = oDocument.GetAllParagraphs();
-				var aData = [];
-				var limit = Math.min(aParagraphs.length, 60);
+				var nCount = oDocument.GetElementsCount();
+				var sections = [];
+				var currentSection = {
+					title: "Root Section",
+					elements: []
+				};
+				
+				var limit = Math.min(nCount, 60);
 				
 				for (var i = 0; i < limit; i++) {
 					try {
-						var oParagraph = aParagraphs[i];
-						if (!oParagraph) continue;
+						var oElement = oDocument.GetElement(i);
+						if (!oElement) continue;
 
-						var oText = "";
-						try { oText = oParagraph.GetText() || ""; } catch(e) {}
+						var type = oElement.GetClassType();
+						
+						if (type === "paragraph") {
+							var oText = "";
+							try { oText = oElement.GetText() || ""; } catch(e) {}
 
-						// Fallback defaults
-						var oFontName = "Calibri";
-						var oFontSize = 22; // 11pt in half-points
-						var oBold = false;
-						var oItalic = false;
-						var oColor = "#000000";
+							// Fallback defaults
+							var oFontName = "Calibri";
+							var oFontSize = 22; // 11pt in half-points
+							var oBold = false;
+							var oItalic = false;
+							var oColor = "#000000";
 
-						// Extract styling from runs inside the paragraph elements list
-						try {
-							var aRuns = oParagraph.GetElements();
-							if (aRuns && aRuns.length > 0) {
-								for (var r = 0; r < aRuns.length; r++) {
-									var oRun = aRuns[r];
-									if (oRun) {
-										// Safe property fetches
-										if (oRun.GetFontName) oFontName = oRun.GetFontName() || oFontName;
-										if (oRun.GetFontSize) oFontSize = oRun.GetFontSize() || oFontSize;
-										if (oRun.GetBold) oBold = oRun.GetBold() || oBold;
-										if (oRun.GetItalic) oItalic = oRun.GetItalic() || oItalic;
-										if (oRun.GetColor) {
-											var c = oRun.GetColor();
-											if (c && c.GetHex) {
-												var hexVal = c.GetHex();
-												if (hexVal) oColor = hexVal;
+							// Extract styling from runs inside the paragraph elements list
+							try {
+								var aRuns = oElement.GetElements();
+								if (aRuns && aRuns.length > 0) {
+									for (var r = 0; r < aRuns.length; r++) {
+										var oRun = aRuns[r];
+										if (oRun) {
+											if (oRun.GetFontName) oFontName = oRun.GetFontName() || oFontName;
+											if (oRun.GetFontSize) oFontSize = oRun.GetFontSize() || oFontSize;
+											if (oRun.GetBold) oBold = oRun.GetBold() || oBold;
+											if (oRun.GetItalic) oItalic = oRun.GetItalic() || oItalic;
+											if (oRun.GetColor) {
+												var c = oRun.GetColor();
+												if (c && c.GetHex) {
+													var hexVal = c.GetHex();
+													if (hexVal) oColor = hexVal;
+												}
 											}
+											break; // Parse first style representation run
 										}
-										break; // Parse first style representation run
 									}
 								}
+							} catch(errRun) {}
+
+							// Paragraph spacing & alignment
+							var oAlign = "left";
+							try { oAlign = oElement.GetJustification() || "left"; } catch(e) {}
+
+							var oSpaceAfter = 0;
+							try { oSpaceAfter = oElement.GetSpacingAfter() || 0; } catch(e) {}
+
+							// Detect if paragraph is heading to group into logical sections
+							var isHeading = false;
+							if ((oFontSize >= 28 || (oBold && oFontSize >= 24)) && oText.length > 0 && oText.length < 150) {
+								isHeading = true;
 							}
-						} catch(errRun) {}
 
-						// Paragraph spacing & alignment
-						var oAlign = "left";
-						try { oAlign = oParagraph.GetJustification() || "left"; } catch(e) {}
+							var elementJSON = {
+								type: "paragraph",
+								index: i,
+								text: oText,
+								style: {
+									fontName: oFontName,
+									fontSize: oFontSize / 2, // Standardize to human points
+									bold: oBold,
+									italic: oItalic,
+									alignment: oAlign,
+									color: oColor,
+									spacingAfter: oSpaceAfter
+								}
+							};
 
-						var oSpaceAfter = 0;
-						try { oSpaceAfter = oParagraph.GetSpacingAfter() || 0; } catch(e) {}
-
-						aData.push({
-							index: i,
-							text: oText,
-							style: {
-								fontName: oFontName,
-								fontSize: oFontSize / 2, // Standardize to human points (e.g. 11pt instead of 22 half-points)
-								bold: oBold,
-								italic: oItalic,
-								alignment: oAlign,
-								color: oColor,
-								spacingAfter: oSpaceAfter
+							if (isHeading) {
+								if (currentSection.elements.length > 0) {
+									sections.push(currentSection);
+								}
+								currentSection = {
+									title: oText,
+									elements: [elementJSON]
+								};
+							} else {
+								currentSection.elements.push(elementJSON);
 							}
-						});
+						} else if (type === "table") {
+							var tableJSON = {
+								type: "table",
+								index: i,
+								rows: []
+							};
+
+							try {
+								var rowCount = oElement.GetRowsCount();
+								var rowLimit = Math.min(rowCount, 10);
+								for (var r = 0; r < rowLimit; r++) {
+									var oRow = oElement.GetRow(r);
+									var cellsJSON = [];
+									if (oRow) {
+										var cellCount = oRow.GetCellsCount();
+										var cellLimit = Math.min(cellCount, 6);
+										for (var c = 0; c < cellLimit; c++) {
+											var oCell = oRow.GetCell(c);
+											var cellText = "";
+											if (oCell) {
+												var cellParagraphs = oCell.GetContent().GetAllParagraphs();
+												var pTexts = [];
+												for (var p = 0; p < Math.min(cellParagraphs.length, 3); p++) {
+													pTexts.push(cellParagraphs[p].GetText() || "");
+												}
+												cellText = pTexts.join("\n");
+											}
+											cellsJSON.push({
+												cellIndex: c,
+												text: cellText
+											});
+										}
+									}
+									tableJSON.rows.push({
+										rowIndex: r,
+										cells: cellsJSON
+									});
+								}
+							} catch(eTable) {}
+
+							currentSection.elements.push(tableJSON);
+						}
 					} catch (pErr) {
 						// Continue gracefully
 					}
 				}
-				return JSON.stringify(aData);
+
+				if (currentSection.elements.length > 0 || sections.length === 0) {
+					sections.push(currentSection);
+				}
+
+				return JSON.stringify({
+					sectionsCount: sections.length,
+					sections: sections
+				});
 			}, false, true, function(result) {
 				clearTimeout(failTimeout);
 				if (result) {
@@ -291,6 +443,8 @@
 	async function queryGroqAPI(apiKey, model, docData, prompt) {
 		const systemMessage = `You are a professional document typesetter and layout agent. Your task is to analyze the provided JSON representation of a document and generate the requested style or content changes as a valid JSON object.
 		
+The document is parsed as a hierarchical structure of logical sections (grouped by headings), paragraphs, and tables. Each paragraph and table has a unique, absolute "index" identifying its location in the document.
+
 You must output a JSON object containing a "changes" key which holds an array of edit commands. Each edit command must have the following structure:
 {
   "changes": [
@@ -326,7 +480,7 @@ Formatting & units specifications:
 - "spacingAfter" (integer, in dxa: 120 = 6pt, 240 = 12pt, 360 = 18pt)
 - "newText" (string, optional - only provide if content change or rewriting was requested by prompt)
 
-If the user wants a global change (e.g. "change the entire font color to red", or "make everything Times New Roman"), you MUST generate "modifyStyle" commands for EVERY single paragraph index in the document.
+If the user wants a global change (e.g. "change the entire font color to yellow", or "make everything Times New Roman"), you MUST generate "modifyStyle" commands for EVERY single paragraph index in the document.
 Respond ONLY with a valid JSON object. Do not include markdown code block formatting (like \`\`\`json).`;
 
 		const userMessage = `Current Document Structure:
@@ -392,7 +546,7 @@ User Request:
 		changesList.innerHTML = '';
 		
 		changes.forEach(change => {
-			const original = cachedDocData.find(p => p.index === change.targetIndex);
+			const original = findElementByIndex(change.targetIndex);
 			if (!original && change.action !== 'createParagraph') return;
 
 			const item = document.createElement('div');
@@ -416,12 +570,14 @@ User Request:
 			if (props.alignment) formatStr += `Align: <b>${props.alignment}</b>; `;
 			if (props.color) formatStr += `Color: <span style="color: ${props.color}; font-weight: bold;">${props.color}</span>; `;
 
+			const originalText = original ? (original.text || `[Table Element at index #${change.targetIndex}]`) : '';
+
 			item.innerHTML = `
 				${actionBadge}
-				<div style="font-weight: 600; margin-bottom: 2px;">Paragraph #${change.targetIndex + 1}</div>
-				${original ? `<div style="color: var(--text-secondary); margin-bottom: 4px; font-style: italic;">"${original.text.substring(0, 50)}${original.text.length > 50 ? '...' : ''}"</div>` : ''}
+				<div style="font-weight: 600; margin-bottom: 2px;">Element #${change.targetIndex + 1}</div>
+				${original ? `<div style="color: var(--text-secondary); margin-bottom: 4px; font-style: italic;">"${originalText.substring(0, 50)}${originalText.length > 50 ? '...' : ''}"</div>` : ''}
 				${props.newText && original ? `
-					<div class="diff-original">"${original.text}"</div>
+					<div class="diff-original">"${originalText}"</div>
 					<div class="diff-new">"${props.newText}"</div>
 				` : ''}
 				${props.newText && change.action === 'createParagraph' ? `
@@ -450,11 +606,11 @@ User Request:
 			const actionName = change.action || 'modifyStyle';
 			
 			if (actionName === 'deleteParagraph') {
-				log(`Executing Action: [Delete] Paragraph #${change.targetIndex + 1}...`, 'warning');
+				log(`Executing Action: [Delete] Element #${change.targetIndex + 1}...`, 'warning');
 			} else if (actionName === 'createParagraph') {
 				log(`Executing Action: [Create] New Paragraph after #${change.targetIndex + 1}...`, 'success');
 			} else {
-				log(`Executing Action: [Formatting] Paragraph #${change.targetIndex + 1}...`, 'info');
+				log(`Executing Action: [Formatting] Element #${change.targetIndex + 1}...`, 'info');
 			}
 
 			// Pass variable to sandboxed callCommand through ONLYOFFICE scope object
@@ -463,8 +619,7 @@ User Request:
 			window.Asc.plugin.callCommand(function() {
 				var change = Asc.scope.change;
 				var oDocument = Api.GetDocument();
-				var aParagraphs = oDocument.GetAllParagraphs();
-				var oParagraph = aParagraphs[change.targetIndex];
+				var oParagraph = oDocument.GetElement(change.targetIndex);
 				
 				if (oParagraph) {
 					try {
@@ -527,8 +682,8 @@ User Request:
 					} catch(e) {}
 
 					// Apply paragraph-level styling
-					try { if (oProps.alignment) oParagraph.SetJustification(oProps.alignment); } catch(e) {}
-					try { if (oProps.spacingAfter !== undefined) oParagraph.SetSpacingAfter(oProps.spacingAfter); } catch(e) {}
+					try { if (oProps.alignment && oParagraph.SetJustification) oParagraph.SetJustification(oProps.alignment); } catch(e) {}
+					try { if (oProps.spacingAfter !== undefined && oParagraph.SetSpacingAfter) oParagraph.SetSpacingAfter(oProps.spacingAfter); } catch(e) {}
 				}
 				return "success";
 			}, false, true, function(result) {
