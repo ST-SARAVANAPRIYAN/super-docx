@@ -121,7 +121,12 @@
 		}
 
 		if (savedModel) {
-			modelSelect.value = savedModel;
+			if (savedModel === 'mixtral-8x7b-32768') {
+				modelSelect.value = 'llama-3.3-70b-versatile';
+				localStorage.setItem('groq_copilot_model', 'llama-3.3-70b-versatile');
+			} else {
+				modelSelect.value = savedModel;
+			}
 		}
 	}
 
@@ -424,9 +429,17 @@
 			cachedDocData = JSON.parse(docJSON);
 			
 			let totalElements = 0;
-			cachedDocData.sections.forEach(s => {
-				totalElements += s.elements.length;
-			});
+			if (cachedDocData.sections) {
+				cachedDocData.sections.forEach(s => {
+					totalElements += s.elements.length;
+				});
+			}
+
+			if (totalElements === 0) {
+				log('Error: Selection range is empty or invalid. Select text in the document first, or switch scan range to "Entire Document" in settings.', 'error');
+				setLoading(false);
+				return;
+			}
 
 			log(`Successfully scanned ${cachedDocData.sections.length} sections containing ${totalElements} elements.`, 'success');
 			log(`Contacting Groq endpoint [api.groq.com/openai/v1] using model: ${modelSelect.value}...`, 'info');
@@ -477,7 +490,7 @@
 		}
 	}
 
-	// Dynamic selection text/range serializer
+	// Dynamic selection text/range serializer with absolute document mapping
 	function serializeSelection() {
 		return new Promise((resolve, reject) => {
 			const failTimeout = setTimeout(() => {
@@ -486,31 +499,109 @@
 
 			window.Asc.plugin.callCommand(function() {
 				var oDocument = Api.GetDocument();
-				var oRange = oDocument.GetRangeBySelect();
+				var oRange = null;
+				try {
+					oRange = oDocument.GetRangeBySelect();
+				} catch(e) {}
+				
 				if (!oRange) return JSON.stringify({ sections: [] });
 				
 				var oText = oRange.GetText() || "";
+				var selectedLines = oText.split(/[\r\n]+/);
 				var paragraphs = [];
-				var lines = oText.split(/[\r\n]+/);
 				
-				var limit = Math.min(lines.length, 30);
-				for (var i = 0; i < limit; i++) {
-					var line = lines[i].trim();
-					if (!line) continue;
-					paragraphs.push({
-						type: "paragraph",
-						index: i,
-						text: lines[i],
-						style: {
-							fontName: "Calibri",
-							fontSize: 11,
-							bold: false,
-							italic: false,
-							alignment: "left",
-							color: "#000000",
-							spacingAfter: 0
+				var nCount = oDocument.GetElementsCount();
+				for (var i = 0; i < nCount; i++) {
+					try {
+						var oElement = oDocument.GetElement(i);
+						if (!oElement || oElement.GetClassType() !== "paragraph") continue;
+						
+						var pText = oElement.GetText() || "";
+						var cleanPText = pText.trim();
+						if (cleanPText === "") continue;
+						
+						// Check if this absolute paragraph text exists inside the selection lines list
+						var isMatched = false;
+						for (var j = 0; j < selectedLines.length; j++) {
+							var cleanSel = selectedLines[j].trim();
+							if (cleanSel.length > 0 && (cleanPText.indexOf(cleanSel) !== -1 || cleanSel.indexOf(cleanPText) !== -1)) {
+								isMatched = true;
+								break;
+							}
 						}
-					});
+						
+						if (isMatched) {
+							// Extract formatting
+							var oFontName = "Calibri";
+							var oFontSize = 22;
+							var oBold = false;
+							var oItalic = false;
+							var oColor = "#000000";
+							
+							try {
+								var aRuns = oElement.GetElements();
+								if (aRuns && aRuns.length > 0) {
+									var oRun = aRuns[0];
+									if (oRun) {
+										if (oRun.GetFontName) oFontName = oRun.GetFontName() || oFontName;
+										if (oRun.GetFontSize) oFontSize = oRun.GetFontSize() || oFontSize;
+										if (oRun.GetBold) oBold = oRun.GetBold() || oBold;
+										if (oRun.GetItalic) oItalic = oRun.GetItalic() || oItalic;
+										if (oRun.GetColor) {
+											var c = oRun.GetColor();
+											if (c && c.GetHex) {
+												var hexVal = c.GetHex();
+												if (hexVal) oColor = hexVal;
+											}
+										}
+									}
+								}
+							} catch(errRun) {}
+							
+							var oAlign = "left";
+							try { oAlign = oElement.GetJustification() || "left"; } catch(e) {}
+							
+							var oSpaceAfter = 0;
+							try { oSpaceAfter = oElement.GetSpacingAfter() || 0; } catch(e) {}
+							
+							paragraphs.push({
+								type: "paragraph",
+								index: i, // Real Absolute Document Index!
+								text: pText,
+								style: {
+									fontName: oFontName,
+									fontSize: oFontSize / 2,
+									bold: oBold,
+									italic: oItalic,
+									alignment: oAlign,
+									color: oColor,
+									spacingAfter: oSpaceAfter
+								}
+							});
+						}
+					} catch(elErr) {}
+				}
+				
+				// Fallback: If no match found by text intersection, serialize selection range line-by-line relative
+				if (paragraphs.length === 0) {
+					for (var i = 0; i < Math.min(selectedLines.length, 30); i++) {
+						var line = selectedLines[i].trim();
+						if (!line) continue;
+						paragraphs.push({
+							type: "paragraph",
+							index: i,
+							text: selectedLines[i],
+							style: {
+								fontName: "Calibri",
+								fontSize: 11,
+								bold: false,
+								italic: false,
+								alignment: "left",
+								color: "#000000",
+								spacingAfter: 0
+							}
+						});
+					}
 				}
 
 				return JSON.stringify({
@@ -917,23 +1008,21 @@ User Request:
 						return "created";
 					}
 
-					// Safe text rewrite using ReplaceTextSmart on selection
+					// Direct run-level text and style updates to avoid selection dependencies
 					try {
-						if (oProps.newText !== undefined && change.action !== 'createParagraph') {
-							Api.ReplaceTextSmart([oProps.newText]);
-						}
-					} catch(e) {}
-
-					// Apply styling directly on the selected Range (Run/Inline level)
-					try {
-						var oRange = oDocument.GetRangeBySelect();
-						if (oRange) {
-							if (oProps.fontName) oRange.SetFontName(oProps.fontName);
-							if (oProps.fontSize) oRange.SetFontSize(oProps.fontSize);
-							if (oProps.bold !== undefined) oRange.SetBold(oProps.bold);
-							if (oProps.italic !== undefined) oRange.SetItalic(oProps.italic);
+						var originalText = oParagraph.GetText() || "";
+						var activeText = oProps.newText !== undefined ? oProps.newText : originalText;
+						
+						oParagraph.RemoveAllElements();
+						var oRun = oParagraph.AddText(activeText);
+						
+						if (oRun) {
+							if (oProps.fontName) oRun.SetFontName(oProps.fontName);
+							// ONLYOFFICE FontSize is specified in half-points (e.g. 11pt = 22)
+							if (oProps.fontSize) oRun.SetFontSize(oProps.fontSize);
+							if (oProps.bold !== undefined) oRun.SetBold(oProps.bold);
+							if (oProps.italic !== undefined) oRun.SetItalic(oProps.italic);
 							
-							// Safe color parser
 							if (oProps.color) {
 								var hex = oProps.color.replace('#', '');
 								if (hex.length === 6) {
@@ -941,10 +1030,10 @@ User Request:
 									var g = parseInt(hex.substring(2, 4), 16);
 									var b = parseInt(hex.substring(4, 6), 16);
 									try {
-										oRange.SetColor(Api.CreateColorFromRGB(r, g, b));
+										oRun.SetColor(Api.CreateColorFromRGB(r, g, b));
 									} catch(eColor) {
 										try {
-											oRange.SetColor(r, g, b);
+											oRun.SetColor(r, g, b);
 										} catch(errHex) {}
 									}
 								}
