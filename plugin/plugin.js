@@ -28,8 +28,29 @@
 	const changesList = document.getElementById('changes-list');
 	const confirmBtn = document.getElementById('confirm-btn');
 
+	// Undo / Redo selectors
+	const toolbarUndo = document.getElementById('toolbar-undo');
+	const toolbarRedo = document.getElementById('toolbar-redo');
+
+	// Scan Range selectors
+	const rangeFull = document.getElementById('range-full');
+	const rangeSelect = document.getElementById('range-select');
+	let scanRange = 'full'; // 'full' or 'select'
+
+	// Summarization elements
+	const chipSummarize = document.getElementById('chip-summarize');
+	const summaryCard = document.getElementById('summary-card');
+	const summaryText = document.getElementById('summary-text');
+	const insertSummaryBtn = document.getElementById('insert-summary-btn');
+	let activeSummaryContent = '';
+
+	// Session Checkpoints elements
+	const saveCheckpointBtn = document.getElementById('save-checkpoint-btn');
+	const checkpointsList = document.getElementById('checkpoints-list');
+
 	let cachedDocData = null;
 	let proposedChanges = null;
+	let checkpoints = [];
 
 	// View Tabs Navigation
 	tabPrompt.addEventListener('click', () => {
@@ -58,6 +79,22 @@
 		viewSettings.classList.add('active');
 		viewPrompt.classList.remove('active');
 		viewStructure.classList.remove('active');
+		renderCheckpointsUI();
+	});
+
+	// Range selectors events
+	rangeFull.addEventListener('click', () => {
+		rangeFull.classList.add('active');
+		rangeSelect.classList.remove('active');
+		scanRange = 'full';
+		log("Scan range set to: Entire Document.", "info");
+	});
+
+	rangeSelect.addEventListener('click', () => {
+		rangeSelect.classList.add('active');
+		rangeFull.classList.remove('active');
+		scanRange = 'select';
+		log("Scan range set to: User Selection Only.", "info");
 	});
 
 	// API Key Visibility Toggle
@@ -115,6 +152,7 @@
 
 	// Suggestion Chips handler
 	document.querySelectorAll('.chip').forEach(chip => {
+		if (chip.id === 'chip-summarize') return; // Skip special chip
 		chip.addEventListener('click', () => {
 			promptInput.value = chip.getAttribute('data-prompt');
 			promptInput.focus();
@@ -138,12 +176,17 @@
 
 	// Dynamic Document JSON Viewer compiler
 	async function refreshDocStructureView() {
-		structureJson.value = "Scanning active document and compiling section-wise structure JSON...";
+		structureJson.value = "Scanning active document structure JSON...";
 		try {
-			const docJSON = await serializeDocument();
+			let docJSON = "";
+			if (scanRange === "select") {
+				docJSON = await serializeSelection();
+			} else {
+				docJSON = await serializeDocument();
+			}
 			const parsed = JSON.parse(docJSON);
 			structureJson.value = JSON.stringify(parsed, null, 2);
-			log("Compiled page/section/table hierarchical document structure JSON successfully.", "success");
+			log("Compiled structural document JSON successfully.", "success");
 		} catch(err) {
 			structureJson.value = "Error scanning document structure: " + err.message;
 			log("Error loading structure: " + err.message, "error");
@@ -172,6 +215,75 @@
 		refreshDocStructureView();
 	});
 
+	// Session Checkpoint Snapshots
+	saveCheckpointBtn.addEventListener('click', () => {
+		saveCheckpoint();
+	});
+
+	async function saveCheckpoint() {
+		log("Capturing active document snapshot...", "info");
+		try {
+			const docJSON = await serializeDocument();
+			const snapshot = JSON.parse(docJSON);
+			const cp = {
+				timestamp: new Date().toLocaleTimeString(),
+				data: snapshot
+			};
+			checkpoints.push(cp);
+			log(`Successfully saved session Checkpoint #${checkpoints.length}!`, 'success');
+			renderCheckpointsUI();
+		} catch (err) {
+			log(`Failed to save checkpoint: ${err.message}`, 'error');
+		}
+	}
+
+	function renderCheckpointsUI() {
+		if (checkpoints.length === 0) {
+			checkpointsList.innerHTML = `<div style="font-size: 11px; color: var(--text-secondary); text-align: center; padding: 8px;">No checkpoints saved yet.</div>`;
+			return;
+		}
+		checkpointsList.innerHTML = '';
+		checkpoints.forEach((cp, index) => {
+			const item = document.createElement('div');
+			item.className = 'checkpoint-item';
+			item.innerHTML = `
+				<span>Snapshot #${index + 1} (${cp.timestamp})</span>
+				<button class="checkpoint-restore-btn" data-index="${index}">Restore</button>
+			`;
+			checkpointsList.appendChild(item);
+		});
+
+		checkpointsList.querySelectorAll('.checkpoint-restore-btn').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const idx = parseInt(btn.getAttribute('data-index'));
+				restoreCheckpoint(idx);
+			});
+		});
+	}
+
+	async function restoreCheckpoint(index) {
+		const cp = checkpoints[index];
+		if (!cp) return;
+		log(`Restoring document state to Snapshot #${index + 1}...`, 'info');
+		
+		let restoreChanges = [];
+		cp.data.sections.forEach(s => {
+			s.elements.forEach(el => {
+				if (el.type === "paragraph" && el.text) {
+					restoreChanges.push({
+						action: "modifyStyle",
+						targetIndex: el.index,
+						properties: {
+							newText: el.text
+						}
+					});
+				}
+			});
+		});
+		
+		executeSequentialEdits(restoreChanges);
+	}
+
 	// Helper to find document element by its absolute logical index inside our parsed structure
 	function findElementByIndex(index) {
 		if (!cachedDocData || !cachedDocData.sections) return null;
@@ -188,8 +300,99 @@
 
 	// Initialize ONLYOFFICE plugin hooks
 	window.Asc.plugin.init = function() {
-		log('Groq AI Copilot v2 PDK initialized.', 'success');
+		log('Groq AI Copilot v3 PDK initialized.', 'success');
 		loadSettings();
+
+		// Bind Undo / Redo toolbar events
+		toolbarUndo.addEventListener('click', () => {
+			window.Asc.plugin.executeMethod("Undo", [], () => {
+				log("Executed document Undo successfully.", "info");
+			});
+		});
+
+		toolbarRedo.addEventListener('click', () => {
+			window.Asc.plugin.executeMethod("Redo", [], () => {
+				log("Executed document Redo successfully.", "info");
+			});
+		});
+
+		// Bind chip-summarize click event
+		chipSummarize.addEventListener('click', async () => {
+			const apiKey = apiKeyInput.value.trim();
+			if (!apiKey) {
+				log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
+				tabSettings.click();
+				return;
+			}
+			setLoading(true);
+			log(`Summarizing document range [${scanRange === 'select' ? 'Selection Only' : 'Entire Document'}]...`, 'info');
+
+			try {
+				let docJSON = "";
+				if (scanRange === "select") {
+					docJSON = await serializeSelection();
+				} else {
+					docJSON = await serializeDocument();
+				}
+				
+				const parsed = JSON.parse(docJSON);
+				
+				const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+					method: 'POST',
+					headers: {
+						'Authorization': `Bearer ${apiKey}`,
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						model: modelSelect.value,
+						messages: [
+							{
+								role: 'system',
+								content: "You are an expert executive summary agent. Analyze the provided text and document structure and return an extremely high-quality summary in 3 to 5 concise bullet points. Format the output directly as clean plain text bullet points starting with standard dash '-' prefixes. Do not return any JSON or markdown blocks."
+							},
+							{
+								role: 'user',
+								content: `Document data: ${JSON.stringify(parsed)}`
+							}
+						],
+						temperature: 0.2
+					})
+				});
+
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+
+				const data = await response.json();
+				activeSummaryContent = data.choices[0].message.content.trim();
+				
+				summaryText.innerText = activeSummaryContent;
+				summaryCard.style.display = 'block';
+				log("Executive summary compiled successfully by Groq AI!", "success");
+			} catch (err) {
+				log(`Summarization failed: ${err.message}`, 'error');
+			} finally {
+				setLoading(false);
+			}
+		});
+
+		// Insert Summary button click event
+		insertSummaryBtn.addEventListener('click', () => {
+			if (!activeSummaryContent) return;
+			log("Inserting summary directly at active cursor selection...", "info");
+
+			window.Asc.scope.summaryText = "\n\n" + activeSummaryContent + "\n\n";
+			window.Asc.plugin.callCommand(function() {
+				var oDocument = Api.GetDocument();
+				var oParagraph = Api.CreateParagraph();
+				oParagraph.AddText(Asc.scope.summaryText);
+				oDocument.InsertContent([oParagraph]);
+				return "success";
+			}, false, true, function(res) {
+				log("Summary successfully inserted into document!", "success");
+				summaryCard.style.display = 'none';
+			});
+		});
 
 		// Click run button
 		executeBtn.addEventListener('click', async () => {
@@ -207,11 +410,16 @@
 			}
 
 			setLoading(true);
-			log('Scanning active document structure, headings, and elements...', 'info');
+			log(`Scanning active range [${scanRange === 'select' ? 'Selection' : 'Entire Document'}] structure and elements...`, 'info');
 
 			try {
-				// Step 1: Read/Serialize Document from ONLYOFFICE
-				const docJSON = await serializeDocument();
+				let docJSON = "";
+				if (scanRange === "select") {
+					docJSON = await serializeSelection();
+				} else {
+					docJSON = await serializeDocument();
+				}
+				
 				cachedDocData = JSON.parse(docJSON);
 				
 				let totalElements = 0;
@@ -219,17 +427,13 @@
 					totalElements += s.elements.length;
 				});
 
-				log(`Successfully scanned ${cachedDocData.sections.length} document sections containing ${totalElements} elements.`, 'success');
-				log(`Document sample structure compiled successfully. Payload characters: ${docJSON.length}`, 'info');
-
-				// Step 2: Query Groq completions API
+				log(`Successfully scanned ${cachedDocData.sections.length} sections containing ${totalElements} elements.`, 'success');
 				log(`Contacting Groq endpoint [api.groq.com/openai/v1] using model: ${modelSelect.value}...`, 'info');
-				const aiResponse = await queryGroqAPI(apiKey, modelSelect.value, cachedDocData, prompt);
+				
+				const aiResponse = await queryGroqAPI(apiKey, modelSelect.value, cachedDocData, prompt, scanRange === "select");
 				
 				log('Received secure API response from Groq.', 'success');
-				log(`Raw JSON response: ${aiResponse.substring(0, 150)}...`, 'info');
-
-				// Step 3: Parse and preview the returned changes
+				
 				proposedChanges = parseAIResponse(aiResponse);
 				
 				if (!proposedChanges || proposedChanges.length === 0) {
@@ -273,13 +477,68 @@
 		}
 	}
 
+	// Dynamic selection text/range serializer
+	function serializeSelection() {
+		return new Promise((resolve, reject) => {
+			const failTimeout = setTimeout(() => {
+				reject(new Error("Selection scanning timed out. ONLYOFFICE sandbox did not respond."));
+			}, 4000);
+
+			window.Asc.plugin.callCommand(function() {
+				var oDocument = Api.GetDocument();
+				var oRange = oDocument.GetRangeBySelect();
+				if (!oRange) return JSON.stringify({ sections: [] });
+				
+				var oText = oRange.GetText() || "";
+				var paragraphs = [];
+				var lines = oText.split(/[\r\n]+/);
+				
+				var limit = Math.min(lines.length, 30);
+				for (var i = 0; i < limit; i++) {
+					var line = lines[i].trim();
+					if (!line) continue;
+					paragraphs.push({
+						type: "paragraph",
+						index: i,
+						text: lines[i],
+						style: {
+							fontName: "Calibri",
+							fontSize: 11,
+							bold: false,
+							italic: false,
+							alignment: "left",
+							color: "#000000",
+							spacingAfter: 0
+						}
+					});
+				}
+
+				return JSON.stringify({
+					sectionsCount: 1,
+					sections: [
+						{
+							title: "Active Selection Range",
+							elements: paragraphs
+						}
+					]
+				});
+			}, false, true, function(result) {
+				clearTimeout(failTimeout);
+				if (result) {
+					resolve(result);
+				} else {
+					reject(new Error("Unable to read selected text range."));
+				}
+			});
+		});
+	}
+
 	// Document serialization - compiles sections, headings, paragraphs, and tables
 	function serializeDocument() {
 		return new Promise((resolve, reject) => {
-			// Defensive timeout to prevent UI hanging if callCommand fails
 			const failTimeout = setTimeout(() => {
 				reject(new Error("Document scanning timed out. ONLYOFFICE sandbox did not respond."));
-			}, 4000);
+			}, 5000);
 
 			window.Asc.plugin.callCommand(function() {
 				var oDocument = Api.GetDocument();
@@ -290,7 +549,8 @@
 					elements: []
 				};
 				
-				var limit = Math.min(nCount, 60);
+				// Scan entire document (supporting up to 250 logical elements dynamically!)
+				var limit = Math.min(nCount, 250);
 				
 				for (var i = 0; i < limit; i++) {
 					try {
@@ -341,9 +601,20 @@
 							var oSpaceAfter = 0;
 							try { oSpaceAfter = oElement.GetSpacingAfter() || 0; } catch(e) {}
 
-							// Detect if paragraph is heading to group into logical sections
+							// Robust dynamic heading heuristics
 							var isHeading = false;
-							if ((oFontSize >= 28 || (oBold && oFontSize >= 24)) && oText.length > 0 && oText.length < 150) {
+							var cleanText = oText.trim().replace(/[\r\n\t]+/g, '');
+							
+							// Rule 1: Font Sizing rules
+							if ((oFontSize >= 28 || (oBold && oFontSize >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
+								isHeading = true;
+							}
+							// Rule 2: Upper Case Heading detection (e.g. "DECLARATION", "ABSTRACT")
+							if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
+								isHeading = true;
+							}
+							// Rule 3: Numbered heading prefix detection (e.g. "1.1 INTRODUCTION", "Chapter 1")
+							if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
 								isHeading = true;
 							}
 
@@ -382,20 +653,20 @@
 
 							try {
 								var rowCount = oElement.GetRowsCount();
-								var rowLimit = Math.min(rowCount, 10);
+								var rowLimit = Math.min(rowCount, 15);
 								for (var r = 0; r < rowLimit; r++) {
 									var oRow = oElement.GetRow(r);
 									var cellsJSON = [];
 									if (oRow) {
 										var cellCount = oRow.GetCellsCount();
-										var cellLimit = Math.min(cellCount, 6);
+										var cellLimit = Math.min(cellCount, 8);
 										for (var c = 0; c < cellLimit; c++) {
 											var oCell = oRow.GetCell(c);
 											var cellText = "";
 											if (oCell) {
 												var cellParagraphs = oCell.GetContent().GetAllParagraphs();
 												var pTexts = [];
-												for (var p = 0; p < Math.min(cellParagraphs.length, 3); p++) {
+												for (var p = 0; p < Math.min(cellParagraphs.length, 5); p++) {
 													pTexts.push(cellParagraphs[p].GetText() || "");
 												}
 												cellText = pTexts.join("\n");
@@ -439,11 +710,11 @@
 		});
 	}
 
-	// Query Groq API with robust schema
-	async function queryGroqAPI(apiKey, model, docData, prompt) {
-		const systemMessage = `You are a professional document typesetter and layout agent. Your task is to analyze the provided JSON representation of a document and generate the requested style or content changes as a valid JSON object.
+	// Query Groq API with robust schema and selection context mapping
+	async function queryGroqAPI(apiKey, model, docData, prompt, isSelection = false) {
+		const systemMessage = `You are a professional document typesetter and layout agent. Your task is to analyze the provided JSON representation of a ${isSelection ? 'selected range of a document' : 'document'} and generate the requested style or content changes as a valid JSON object.
 		
-The document is parsed as a hierarchical structure of logical sections (grouped by headings), paragraphs, and tables. Each paragraph and table has a unique, absolute "index" identifying its location in the document.
+Each paragraph and table has a unique, absolute "index" identifying its location in the document.
 
 You must output a JSON object containing a "changes" key which holds an array of edit commands. Each edit command must have the following structure:
 {
@@ -480,7 +751,7 @@ Formatting & units specifications:
 - "spacingAfter" (integer, in dxa: 120 = 6pt, 240 = 12pt, 360 = 18pt)
 - "newText" (string, optional - only provide if content change or rewriting was requested by prompt)
 
-If the user wants a global change (e.g. "change the entire font color to yellow", or "make everything Times New Roman"), you MUST generate "modifyStyle" commands for EVERY single paragraph index in the document.
+${isSelection ? 'IMPORTANT: You are targeting the ACTIVE SELECTION range. Apply modifications only targeting elements present inside the active selection.' : 'If the user wants a global change (e.g. "change the entire font color to yellow"), you MUST generate "modifyStyle" commands for EVERY single paragraph index in the document.'}
 Respond ONLY with a valid JSON object. Do not include markdown code block formatting (like \`\`\`json).`;
 
 		const userMessage = `Current Document Structure:
@@ -591,7 +862,7 @@ User Request:
 		changesCard.style.display = 'block';
 	}
 
-	// Sequential, Animated, Interactive execution engine
+	// Sequential, Animated, Interactive execution engine utilizing AddElement and RemoveElement
 	function executeSequentialEdits(changes) {
 		let i = 0;
 		
@@ -630,7 +901,7 @@ User Request:
 					var oProps = change.properties || {};
 					
 					if (change.action === 'deleteParagraph') {
-						try { oParagraph.Delete(); } catch(e) {}
+						try { oDocument.RemoveElement(change.targetIndex); } catch(e) {}
 						return "deleted";
 					}
 					
@@ -640,10 +911,10 @@ User Request:
 							if (oProps.newText) {
 								oNewParagraph.AddText(oProps.newText);
 							}
-							oParagraph.InsertAfter(oNewParagraph);
-							oParagraph = oNewParagraph;
+							oDocument.AddElement(change.targetIndex + 1, oNewParagraph);
 							oNewParagraph.Select();
 						} catch(e) {}
+						return "created";
 					}
 
 					// Safe text rewrite using ReplaceTextSmart on selection
