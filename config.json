@@ -1,0 +1,58 @@
+{
+	"name": "Groq AI Copilot",
+	"nameLocale": {
+		"ru": "Groq ИИ Копилот",
+		"fr": "Groq AI Copilot",
+		"es": "Groq AI Copilot",
+		"pt-BR": "Groq AI Copilot",
+		"de": "Groq AI Copilot",
+		"cs-CS": "Groq AI Copilot"
+	},
+	"guid": "asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}",
+	"version": "1.0.0",
+	"minVersion": "5.0.0",
+
+	"variations": [
+		{
+			"description": "Autonomous AI formatting and editing powered by the Groq API.",
+			"descriptionLocale": {
+				"ru": "Автономное ИИ форматирование и редактирование на базе Groq API."
+			},
+			"url": "index.html",
+
+			"icons": [ "resources/img/icon.png", "resources/img/icon@2x.png" ],
+			"icons2": [
+				{
+					"100%": { "normal": "resources/img/icon.png" },
+					"200%": { "normal": "resources/img/icon@2x.png" }
+				}
+			],
+			"isViewer": false,
+			"EditorsSupport": [ "word" ],
+
+			"isVisual": true,
+			"isModal": false,
+			"isInsideMode": true,
+
+			"initDataType": "text",
+			"initData": "",
+
+			"isUpdateOleOnResize": false,
+
+			"buttons": [],
+			"initOnSelectionChanged": true,
+			"store": {
+				"background": {
+					"light" : "#f59e0b",
+					"dark" : "#d97706"
+				},
+				"screenshots" : [],
+				"icons" : {
+					"light" : "resources/img",
+					"dark"  : "resources/img"
+				},
+				"categories": ["specAbilities", "work"]
+			}
+		}
+	]
+}
