@@ -1,12 +1,12 @@
 {
-	"name": "Groq AI Copilot",
+	"name": " Super Editor ",
 	"nameLocale": {
-		"ru": "Groq ИИ Копилот",
-		"fr": "Groq AI Copilot",
-		"es": "Groq AI Copilot",
-		"pt-BR": "Groq AI Copilot",
-		"de": "Groq AI Copilot",
-		"cs-CS": "Groq AI Copilot"
+		"ru": "Super Editor",
+		"fr": "Super Editor",
+		"es": "Super Editor",
+		"pt-BR": "Super Editor",
+		"de": "Super Editor",
+		"cs-CS": "Super Editor"
 	},
 	"guid": "asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}",
 	"version": "1.0.0",
