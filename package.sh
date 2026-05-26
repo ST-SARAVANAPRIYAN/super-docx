@@ -3,7 +3,7 @@
 set -e
 
 # Change directory to plugin folder and zip all contents cleanly from root
-echo "📦 Packaging ONLYOFFICE Groq AI Copilot plugin..."
+echo "📦 Packaging ONLYOFFICE Super Editor plugin..."
 if [ -d "plugin" ]; then
     cd plugin
     # Check if zip is installed, fallback to python if not
