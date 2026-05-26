@@ -25,48 +25,46 @@ This repository contains the source for the `super-docx` ONLYOFFICE plugin and a
 └── README.md
 ```
 
-## Installation
+## Installation & Development
 
-Developer (symlink) mode — for local development and live reload:
+To develop and test local changes:
 
-```bash
-# create the plugins dir if needed
-mkdir -p ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/
+1. **Clean up old plugin directory structures:**
+   ```bash
+   rm -rf ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/{6298516B-E753-435E-A2E4-2C76A28C73B2}
+   rm -rf ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}
+   rm -rf /home/saravana/.local/share/onlyoffice/desktopeditors/editors/sdkjs-plugins/{6298516B-E753-435E-A2E4-2C76A28C73B2}
+   ```
 
-# symlink this repo's plugin folder into ONLYOFFICE's plugins
-ln -s "$PWD/plugin" ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/super-docx
+2. **Run the Hot-Sync File Watcher:**
+   Since ONLYOFFICE's internal browser sandbox can have sandboxing or permission-based issues following symbolic links on Linux, we provide a premium Node.js hot-sync script. It recursively watches your local `plugin/` folder and instantly copies any modified files to ONLYOFFICE's physical plugin installation directories:
+   ```bash
+   node dev-watch.js
+   ```
 
-# restart ONLYOFFICE to load the plugin
-```
+3. **Start ONLYOFFICE Desktop Editors in Debug Mode:**
+   ```bash
+   onlyoffice-desktopeditors --ascdesktop-support-debug-info
+   ```
 
-Packaged mode — create a distributable plugin:
+4. **Iterate:**
+   Any change you make to `plugin/index.html` or `plugin/plugin.js` will instantly sync. Simply right-click on the plugin's sidebar within ONLYOFFICE and choose **Reload** to view updates instantly!
 
+## Packaged Production Mode
+
+To bundle the plugin into a distributable file for others:
 ```bash
 ./package.sh
 # This produces super-docx.plugin in the repo root
 ```
+Then, install it in ONLYOFFICE via **Plugin Manager** → **Add** (or **Install from File**).
 
-Then install via ONLYOFFICE's Plugin Manager → Install plugin manually.
+## Features & Usage
 
-## Usage
+The `super-docx` plugin automatically serializes document structures dynamically.
 
-- Open ONLYOFFICE Desktop Editors.
-- Open the Plugins sidebar and enable `super-docx`.
-- Use the plugin UI to inspect serialization info and apply styling actions.
+- **Dynamic Range Mode:** Removes the need to manually choose between "Selection Only" or "Entire Doc". If text is highlighted, the plugin automatically parses the selection (mapping the elements back to their absolute indices). If nothing is selected, it falls back to parsing the entire document.
+- **Instant JSON Updates:** The structural JSON parses and compiles in real-time as the cursor or selection moves across the document.
+- **Summarization & AI Commands:** Leverage AI assistance powered by Groq. Configure your API key and model in the Settings tab.
 
-## Development
-
-- Edit UI and scripts in `plugin/index.html` and `plugin/plugin.js`.
-- Check JS console via Developer Tools (right-click → Inspect) while ONLYOFFICE is running with debug info.
-
-Debug launch example:
-
-```bash
-onlyoffice-desktopeditors --ascdesktop-support-debug-info
-```
-
-## Contributing
-
-- Fork and open a pull request for fixes or improvements.
-- Use clear commit messages and include a short description of changes.
 
