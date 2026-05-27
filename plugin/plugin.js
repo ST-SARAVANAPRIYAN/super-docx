@@ -214,7 +214,7 @@
 	async function saveCheckpoint() {
 		log("Capturing active document snapshot...", "info");
 		try {
-			const docJSON = await serializeDocument();
+			const docJSON = await serializeActiveContent();
 			const snapshot = JSON.parse(docJSON);
 			const cp = {
 				timestamp: new Date().toLocaleTimeString(),
@@ -581,6 +581,12 @@
 					var rColor = "";
 					var rHighlight = null;
 					var rShd = null;
+					var rSmallCaps = null;
+					var rCaps = null;
+					var rSubscript = null;
+					var rSuperscript = null;
+					var rSpacing = 0;
+					var rDoubleStrikeout = null;
 
 					// 1. Direct from Run properties
 					try {
@@ -595,6 +601,12 @@
 					try { if (oRun.GetItalic) rItalic = oRun.GetItalic(); } catch(e) {}
 					try { if (oRun.GetUnderline) rUnderline = !!oRun.GetUnderline(); } catch(e) {}
 					try { if (oRun.GetStrikeout) rStrikeout = !!oRun.GetStrikeout(); } catch(e) {}
+					try { if (oRun.GetSmallCaps) rSmallCaps = !!oRun.GetSmallCaps(); } catch(e) {}
+					try { if (oRun.GetCaps) rCaps = !!oRun.GetCaps(); } catch(e) {}
+					try { if (oRun.GetSubscript) rSubscript = !!oRun.GetSubscript(); } catch(e) {}
+					try { if (oRun.GetSuperscript) rSuperscript = !!oRun.GetSuperscript(); } catch(e) {}
+					try { if (oRun.GetSpacing) rSpacing = oRun.GetSpacing() || 0; } catch(e) {}
+					try { if (oRun.GetDoubleStrikeout) rDoubleStrikeout = !!oRun.GetDoubleStrikeout(); } catch(e) {}
 					try {
 						if (oRun.GetColor) {
 							var c = oRun.GetColor();
@@ -613,6 +625,12 @@
 								if (rItalic === null && tp.GetItalic) rItalic = tp.GetItalic();
 								if (rUnderline === null && tp.GetUnderline) rUnderline = !!tp.GetUnderline();
 								if (rStrikeout === null && tp.GetStrikeout) rStrikeout = !!tp.GetStrikeout();
+								if (rSmallCaps === null && tp.GetSmallCaps) rSmallCaps = !!tp.GetSmallCaps();
+								if (rCaps === null && tp.GetCaps) rCaps = !!tp.GetCaps();
+								if (rSubscript === null && tp.GetSubscript) rSubscript = !!tp.GetSubscript();
+								if (rSuperscript === null && tp.GetSuperscript) rSuperscript = !!tp.GetSuperscript();
+								if (rSpacing === 0 && tp.GetSpacing) rSpacing = tp.GetSpacing() || 0;
+								if (rDoubleStrikeout === null && tp.GetDoubleStrikeout) rDoubleStrikeout = !!tp.GetDoubleStrikeout();
 								if (!rColor && tp.GetColor) {
 									var c = tp.GetColor();
 									if (c && c.GetHex) rColor = c.GetHex() || "";
@@ -650,6 +668,12 @@
 										if (rItalic === null && stp.GetItalic) rItalic = stp.GetItalic();
 										if (rUnderline === null && stp.GetUnderline) rUnderline = !!stp.GetUnderline();
 										if (rStrikeout === null && stp.GetStrikeout) rStrikeout = !!stp.GetStrikeout();
+										if (rSmallCaps === null && stp.GetSmallCaps) rSmallCaps = !!stp.GetSmallCaps();
+										if (rCaps === null && stp.GetCaps) rCaps = !!stp.GetCaps();
+										if (rSubscript === null && stp.GetSubscript) rSubscript = !!stp.GetSubscript();
+										if (rSuperscript === null && stp.GetSuperscript) rSuperscript = !!stp.GetSuperscript();
+										if (rSpacing === 0 && stp.GetSpacing) rSpacing = stp.GetSpacing() || 0;
+										if (rDoubleStrikeout === null && stp.GetDoubleStrikeout) rDoubleStrikeout = !!stp.GetDoubleStrikeout();
 										if (!rColor && stp.GetColor) {
 											var c = stp.GetColor();
 											if (c && c.GetHex) rColor = c.GetHex() || "";
@@ -681,6 +705,11 @@
 					if (rItalic === null) rItalic = false;
 					if (rUnderline === null) rUnderline = false;
 					if (rStrikeout === null) rStrikeout = false;
+					if (rSmallCaps === null) rSmallCaps = false;
+					if (rCaps === null) rCaps = false;
+					if (rSubscript === null) rSubscript = false;
+					if (rSuperscript === null) rSuperscript = false;
+					if (rDoubleStrikeout === null) rDoubleStrikeout = false;
 					if (!rColor) rColor = "#000000";
 
 					return {
@@ -690,6 +719,12 @@
 						italic: !!rItalic,
 						underline: !!rUnderline,
 						strikeout: !!rStrikeout,
+						smallCaps: !!rSmallCaps,
+						caps: !!rCaps,
+						subscript: !!rSubscript,
+						superscript: !!rSuperscript,
+						characterSpacing: rSpacing,
+						doubleStrikeout: !!rDoubleStrikeout,
 						color: rColor,
 						highlight: rHighlight,
 						shading: rShd
@@ -713,6 +748,10 @@
 					var oLineSpacingTwips = 0;
 					var oShd = null;
 					var listType = null;
+					var oIndLeft = 0;
+					var oIndRight = 0;
+					var oIndFirstLine = 0;
+					var oStyleName = null;
 
 					// 1. Get properties from first run of paragraph
 					try {
@@ -761,6 +800,15 @@
 										else if (sd.GetHex) oShd = sd.GetHex() || null;
 									}
 								}
+								
+								if (pPr.GetIndLeft) oIndLeft = pPr.GetIndLeft() || 0;
+								if (pPr.GetIndRight) oIndRight = pPr.GetIndRight() || 0;
+								if (pPr.GetIndFirstLine) oIndFirstLine = pPr.GetIndFirstLine() || 0;
+								
+								if (pPr.GetStyle) {
+									var style = pPr.GetStyle();
+									if (style && style.GetName) oStyleName = style.GetName();
+								}
 							}
 						}
 					} catch(e) {}
@@ -796,12 +844,81 @@
 						lineSpacingRule: oLineSpacingRule,
 						lineSpacingTwips: oLineSpacingTwips,
 						shading: oShd,
-						listType: listType
+						listType: listType,
+						indLeft: oIndLeft,
+						indRight: oIndRight,
+						indFirstLine: oIndFirstLine,
+						styleName: oStyleName
 					};
 				}
 
-				// Define serializeRunsInside using rich style extraction
-				function serializeRunsInside(oElement) {
+				// Helper to omit default styles and duplicates (Delta compression)
+				function compressParagraphStyle(style) {
+					var compressed = {};
+					var defaults = {
+						fontName: "Calibri",
+						fontSize: 11,
+						bold: false,
+						italic: false,
+						underline: false,
+						strikeout: false,
+						alignment: "left",
+						color: "#000000",
+						spacingBefore: 0,
+						spacingAfter: 0,
+						lineSpacing: 1.0,
+						lineSpacingRule: "auto",
+						lineSpacingTwips: 0,
+						shading: null,
+						listType: null,
+						indLeft: 0,
+						indRight: 0,
+						indFirstLine: 0,
+						styleName: null
+					};
+					
+					for (var key in style) {
+						if (style.hasOwnProperty(key)) {
+							var val = style[key];
+							var def = defaults[key];
+							if (val !== def) {
+								if (def === null && !val) continue;
+								compressed[key] = val;
+							}
+						}
+					}
+					return compressed;
+				}
+
+				// Helper to filter run styles that match the paragraph's resolved layout style
+				function compressRunStyle(runStyle, paraStyle) {
+					var compressed = {};
+					if (runStyle.fontName !== paraStyle.fontName) compressed.fontName = runStyle.fontName;
+					if (runStyle.fontSize !== paraStyle.fontSize) compressed.fontSize = runStyle.fontSize;
+					if (runStyle.bold !== paraStyle.bold) compressed.bold = runStyle.bold;
+					if (runStyle.italic !== paraStyle.italic) compressed.italic = runStyle.italic;
+					if (runStyle.underline !== paraStyle.underline) compressed.underline = runStyle.underline;
+					if (runStyle.strikeout !== paraStyle.strikeout) compressed.strikeout = runStyle.strikeout;
+					if (runStyle.doubleStrikeout !== paraStyle.doubleStrikeout) compressed.doubleStrikeout = runStyle.doubleStrikeout;
+					if (runStyle.smallCaps !== paraStyle.smallCaps) compressed.smallCaps = runStyle.smallCaps;
+					if (runStyle.caps !== paraStyle.caps) compressed.caps = runStyle.caps;
+					if (runStyle.subscript !== paraStyle.subscript) compressed.subscript = runStyle.subscript;
+					if (runStyle.superscript !== paraStyle.superscript) compressed.superscript = runStyle.superscript;
+					if (runStyle.characterSpacing !== paraStyle.characterSpacing && runStyle.characterSpacing !== 0) compressed.characterSpacing = runStyle.characterSpacing;
+					if (runStyle.color !== paraStyle.color && runStyle.color !== "#000000") compressed.color = runStyle.color;
+					if (runStyle.highlight && runStyle.highlight !== "none") compressed.highlight = runStyle.highlight;
+					if (runStyle.shading) compressed.shading = runStyle.shading;
+
+					for (var key in compressed) {
+						if (compressed.hasOwnProperty(key)) {
+							return compressed;
+						}
+					}
+					return null;
+				}
+
+				// Define serializeRunsInside using rich style extraction & delta compression
+				function serializeRunsInside(oElement, paraStyle) {
 					var runsData = [];
 					try {
 						var count = oElement.GetElementsCount();
@@ -812,11 +929,13 @@
 								if (rText === "") continue;
 								
 								var runStyle = extractRunStyle(oRun, oElement);
+								var compressed = compressRunStyle(runStyle, paraStyle);
 								
-								runsData.push({
-									text: rText,
-									style: runStyle
-								});
+								var runObj = { text: rText };
+								if (compressed) {
+									runObj.style = compressed;
+								}
+								runsData.push(runObj);
 							}
 						}
 					} catch(e) {}
@@ -846,10 +965,68 @@
 				}
 				
 				var sections = [];
+				var precedingContext = [];
+				var succeedingContext = [];
+				var documentHeadings = [];
+				var pageSettings = null;
+				var elementsCount = oDocument.GetElementsCount();
+
+				// Compile global document outline map & section styles beforehand
+				for (var h = 0; h < elementsCount; h++) {
+					try {
+						var oElem = oDocument.GetElement(h);
+						if (oElem && oElem.GetClassType() === "paragraph") {
+							var oText = oElem.GetText() || "";
+							var paraStyle = extractParagraphStyle(oElem);
+							var cleanText = oText.trim().replace(/[\r\n\t]+/g, '');
+							var isHeading = false;
+							
+							if (paraStyle.styleName && paraStyle.styleName.toLowerCase().indexOf("heading") !== -1) {
+								isHeading = true;
+							} else if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
+								isHeading = true;
+							} else if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
+								isHeading = true;
+							} else if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
+								isHeading = true;
+							}
+							
+							if (isHeading) {
+								documentHeadings.push({
+									index: h,
+									text: oText,
+									styleName: paraStyle.styleName || ("Heading (Size " + paraStyle.fontSize + "pt)")
+								});
+							}
+						}
+					} catch(eOutline) {}
+				}
+
+				try {
+					var firstSection = null;
+					if (typeof oDocument.GetSections === "function") {
+						var secs = oDocument.GetSections();
+						if (secs && secs.length > 0) firstSection = secs[0];
+					} else if (typeof oDocument.GetSection === "function") {
+						firstSection = oDocument.GetSection(0);
+					}
+					if (firstSection) {
+						pageSettings = {};
+						try { if (firstSection.GetPageWidth) pageSettings.pageWidth = firstSection.GetPageWidth(); } catch(e) {}
+						try { if (firstSection.GetPageHeight) pageSettings.pageHeight = firstSection.GetPageHeight(); } catch(e) {}
+						try { if (firstSection.GetPageOrientation) pageSettings.pageOrientation = firstSection.GetPageOrientation(); } catch(e) {}
+						try { if (firstSection.GetMarginLeft) pageSettings.marginLeft = firstSection.GetMarginLeft(); } catch(e) {}
+						try { if (firstSection.GetMarginRight) pageSettings.marginRight = firstSection.GetMarginRight(); } catch(e) {}
+						try { if (firstSection.GetMarginTop) pageSettings.marginTop = firstSection.GetMarginTop(); } catch(e) {}
+						try { if (firstSection.GetMarginBottom) pageSettings.marginBottom = firstSection.GetMarginBottom(); } catch(e) {}
+					}
+				} catch(ePage) {}
 				
 				if (isSelection && selectedParagraphs.length > 0) {
 					// --- SELECTION ONLY MODE (serialize only the highlighted range) ---
 					var elements = [];
+					var firstAbsIndex = -1;
+					var lastAbsIndex = -1;
 					
 					for (var i = 0; i < selectedParagraphs.length; i++) {
 						var selPara = selectedParagraphs[i];
@@ -857,7 +1034,6 @@
 						
 						// Find the absolute document element index
 						var absoluteIndex = -1;
-						var elementsCount = oDocument.GetElementsCount();
 						for (var j = 0; j < elementsCount; j++) {
 							var docElem = oDocument.GetElement(j);
 							if (docElem && docElem.GetClassType() === "paragraph") {
@@ -883,12 +1059,19 @@
 						if (absoluteIndex === -1) {
 							absoluteIndex = i;
 						}
+
+						if (firstAbsIndex === -1) {
+							firstAbsIndex = absoluteIndex;
+						}
+						lastAbsIndex = absoluteIndex;
 						
 						var fullParaText = selPara.GetText() || "";
 						var selectedText = selectedLines[i] || "";
 						var startIndex = fullParaText.indexOf(selectedText);
 						if (startIndex === -1) startIndex = 0;
 						
+						// Get paragraph style details first for run style delta-compression
+						var paraStyle = extractParagraphStyle(selPara);
 						var runsData = [];
 						var currentOffset = 0;
 						try {
@@ -912,10 +1095,12 @@
 										var slicedText = rText.substring(intersectStart - runStart, intersectEnd - runStart);
 										if (slicedText.length > 0) {
 											var runStyle = extractRunStyle(oRun, selPara);
-											runsData.push({
-												text: slicedText,
-												style: runStyle
-											});
+											var compressed = compressRunStyle(runStyle, paraStyle);
+											var runObj = { text: slicedText };
+											if (compressed) {
+												runObj.style = compressed;
+											}
+											runsData.push(runObj);
 										}
 									}
 								}
@@ -924,33 +1109,84 @@
 						
 						// If runs extraction intersects empty or misses, fall back to first run style or paragraph defaults
 						if (runsData.length === 0 && selectedText.length > 0) {
-							var pStyle = extractParagraphStyle(selPara);
-							runsData.push({
-								text: selectedText,
-								style: {
-									fontName: pStyle.fontName,
-									fontSize: pStyle.fontSize,
-									bold: pStyle.bold,
-									italic: pStyle.italic,
-									underline: pStyle.underline,
-									strikeout: pStyle.strikeout,
-									color: pStyle.color,
-									highlight: null,
-									shading: pStyle.shading
-								}
-							});
+							var compressed = compressRunStyle({
+								fontName: paraStyle.fontName,
+								fontSize: paraStyle.fontSize,
+								bold: paraStyle.bold,
+								italic: paraStyle.italic,
+								underline: paraStyle.underline,
+								strikeout: paraStyle.strikeout,
+								doubleStrikeout: paraStyle.doubleStrikeout,
+								smallCaps: paraStyle.smallCaps,
+								caps: paraStyle.caps,
+								subscript: paraStyle.subscript,
+								superscript: paraStyle.superscript,
+								characterSpacing: paraStyle.characterSpacing,
+								color: paraStyle.color,
+								highlight: null,
+								shading: paraStyle.shading
+							}, paraStyle);
+							
+							var runObj = { text: selectedText };
+							if (compressed) {
+								runObj.style = compressed;
+							}
+							runsData.push(runObj);
 						}
 						
-						// Get paragraph style details
-						var paraStyle = extractParagraphStyle(selPara);
+						// Determine if the runs data contains no styling overrides (homogeneous paragraph check)
+						var isHomogeneous = true;
+						for (var k = 0; k < runsData.length; k++) {
+							if (runsData[k].style) {
+								isHomogeneous = false;
+								break;
+							}
+						}
 						
-						elements.push({
+						var elementJSON = {
 							type: "paragraph",
 							index: absoluteIndex,
 							text: selectedText,
-							runs: runsData,
-							style: paraStyle
-						});
+							style: compressParagraphStyle(paraStyle)
+						};
+						if (!isHomogeneous && runsData.length > 0) {
+							elementJSON.runs = runsData;
+						}
+						
+						elements.push(elementJSON);
+					}
+
+					// Fetch Preceding and Succeeding Context paragraphs to make the Copilot fully aware of surroundings!
+					if (firstAbsIndex > 0) {
+						var startPre = Math.max(0, firstAbsIndex - 4);
+						for (var p = startPre; p < firstAbsIndex; p++) {
+							try {
+								var oElem = oDocument.GetElement(p);
+								if (oElem && oElem.GetClassType() === "paragraph") {
+									precedingContext.push({
+										index: p,
+										text: oElem.GetText() || "",
+										style: compressParagraphStyle(extractParagraphStyle(oElem))
+									});
+								}
+							} catch(ePre) {}
+						}
+					}
+					
+					if (lastAbsIndex >= 0 && lastAbsIndex < elementsCount - 1) {
+						var endSuf = Math.min(elementsCount, lastAbsIndex + 5);
+						for (var p = lastAbsIndex + 1; p < endSuf; p++) {
+							try {
+								var oElem = oDocument.GetElement(p);
+								if (oElem && oElem.GetClassType() === "paragraph") {
+									succeedingContext.push({
+										index: p,
+										text: oElem.GetText() || "",
+										style: compressParagraphStyle(extractParagraphStyle(oElem))
+									});
+								}
+							} catch(eSuf) {}
+						}
 					}
 					
 					sections.push({
@@ -960,13 +1196,12 @@
 					
 				} else {
 					// --- ENTIRE DOCUMENT MODE (Root Section fallback) ---
-					var nCount = oDocument.GetElementsCount();
 					var currentSection = {
 						title: "Root Section",
 						elements: []
 					};
 					
-					var limit = Math.min(nCount, 250);
+					var limit = Math.min(elementsCount, 250);
 					for (var i = 0; i < limit; i++) {
 						try {
 							var oElement = oDocument.GetElement(i);
@@ -993,13 +1228,24 @@
 									isHeading = true;
 								}
 								
+								var runsData = serializeRunsInside(oElement, paraStyle);
+								var isHomogeneous = true;
+								for (var k = 0; k < runsData.length; k++) {
+									if (runsData[k].style) {
+										isHomogeneous = false;
+										break;
+									}
+								}
+
 								var elementJSON = {
 									type: "paragraph",
 									index: i,
 									text: oText,
-									runs: serializeRunsInside(oElement),
-									style: paraStyle
+									style: compressParagraphStyle(paraStyle)
 								};
+								if (!isHomogeneous && runsData.length > 0) {
+									elementJSON.runs = runsData;
+								}
 								
 								if (isHeading) {
 									if (currentSection.elements.length > 0) {
@@ -1065,6 +1311,17 @@
 				
 				return JSON.stringify({
 					mode: isSelection ? "selection" : "document",
+					metadata: {
+						totalElements: elementsCount,
+						selectedElementsCount: isSelection ? selectedParagraphs.length : elementsCount,
+						selectionRange: isSelection ? { start: firstAbsIndex, end: lastAbsIndex } : null,
+						pageSettings: pageSettings
+					},
+					documentHeadings: documentHeadings,
+					surroundingContext: isSelection ? {
+						preceding: precedingContext,
+						succeeding: succeedingContext
+					} : null,
 					sectionsCount: sections.length,
 					sections: sections
 				});
@@ -1085,6 +1342,11 @@
 		
 Each paragraph and table has a unique, absolute "index" identifying its location in the document.
 
+CONTEXT-AWARE FEATURES & BOUNDARIES:
+- The input JSON contains a "documentHeadings" outline array that identifies the headers of the document, their levels, and their target paragraph indices. Use this to maintain proper header structure and hierarchy!
+- When you are editing a selected range, "surroundingContext" provides the preceding and succeeding paragraphs. Use this surrounding context to perform boundary-conscious, accurate, and styling-consistent text and layout updates that blend seamlessly into the document.
+- The input metadata has "pageSettings" detailing the active margins and page orientation. Ensure your generated layout complies with these boundary limits!
+
 You must output a JSON object containing a "changes" key which holds an array of edit commands. Each edit command must have the following structure:
 {
   "changes": [
@@ -1102,6 +1364,14 @@ Available actions:
 - "pasteHTML": CRITICAL & HIGHLY PREFERRED action for generating new documents, writing essays, creating extensive articles, letters, reports, or executing large-scale structural text replacements. This passes a complete, richly-styled HTML string to the document editor, which ONLYOFFICE natively renders with perfect layout fidelity. The "properties" MUST contain an "html" key with the complete, beautifully typeset HTML.
   * targetIndex: The paragraph index where this content should be inserted/pasted (e.g. overwriting the active selection or replacing text).
   * properties: { "html": "<html string with h1, h2, p, ul, ol, li, and inline CSS style rules like text-align:justify; font-family:'Times New Roman'; font-size:12pt; color:#ff0000; text-decoration:underline; font-weight:bold; background-color:yellow;>" }
+  * EXTENDED HTML TAGS & INLINE CSS PROPERTIES SUPPORTED:
+    - <sup> (superscript), <sub> (subscript), <small> (small caps), <big> (caps with larger size), <del>/<s> (strikeout).
+    - style="vertical-align: super | sub;" (superscript / subscript)
+    - style="letter-spacing: 2pt;" (character spacing)
+    - style="text-transform: uppercase | lowercase;" (caps / lowercase)
+    - style="font-variant: small-caps;" (small caps)
+    - style="text-decoration: underline | line-through | double-line-through;" (supports double strikeout)
+    - style="margin-left: 20px; margin-right: 20px; text-indent: 10px;" (left, right, and first-line indentation)
 - "modifyStyle": Set simple fonts, size, spacing, bold, alignment, color, or minor text updates on an existing paragraph index.
 - "createParagraph": Create a new blank paragraph after the targetIndex.
 - "deleteParagraph": Remove this paragraph from the document.
@@ -1111,13 +1381,28 @@ Formatting & units specifications for "modifyStyle":
 - "fontSize" (integer): Must be in half-points (e.g., 22 for 11pt, 24 for 12pt, 28 for 14pt, 32 for 16pt, 48 for 24pt). The input document represents size in standard points, but you MUST write changes in half-points.
 - "bold" (boolean)
 - "italic" (boolean)
-- "color" (string hex code like "#1d4ed8" or "#ffff00")
+- "underline" (boolean)
+- "strikeout" (boolean)
+- "doubleStrikeout" (boolean): Sets double-line strikeout formatting.
+- "smallCaps" (boolean)
+- "caps" (boolean)
+- "subscript" (boolean)
+- "superscript" (boolean)
+- "characterSpacing" (integer): Spacing/letter-spacing in dxa units (20 dxa = 1pt).
+- "color" (string hex code for text/font color, e.g. "#1d4ed8" or "#e11d48")
+- "highlight" (string, text highlight/background color, e.g. "yellow", "red", "green", "blue", "cyan", "magenta", "none")
 - "alignment" (string: "left", "right", "center", "justify")
 - "spacingAfter" (integer, in dxa: 120 = 6pt, 240 = 12pt, 360 = 18pt)
+- "spacingBefore" (integer, in dxa)
+- "lineSpacing" (number): Spacing multiplier (e.g. 1.15, 1.5, 2.0).
+- "indLeft" (integer): Left paragraph indentation in dxa (e.g. 240 = 12pt).
+- "indRight" (integer): Right paragraph indentation in dxa.
+- "indFirstLine" (integer): First line indentation in dxa. Use negative value for hanging indent.
+- "shading" (string hex code): Paragraph background color shading (e.g., "#f3f4f6").
 - "newText" (string, optional - only provide for minor text edits or simple updates)
 
 INLINE GRANULAR FORMATTING IN "newText" (Only when using "modifyStyle"):
-If using "modifyStyle" and the user's prompt requests specific formatting of certain words, phrases, headings, or elements inside that paragraph, you can use standard inline HTML tags (<b>, <i>, <u>, <font color="#hex">, <mark>) inside "newText".
+If using "modifyStyle" and the user's prompt requests specific formatting of certain words, phrases, headings, or elements inside that paragraph, you can use standard inline HTML tags (<b>, <i>, <u>, <sup>, <sub>, <small>, <big>, <del>, <mark>, <span style="...">) inside "newText".
 However, remember that "pasteHTML" is the absolute standard and is 100% preferred over "modifyStyle" for all long-form content generation and writing tasks!
 
 ${isSelection ? 'IMPORTANT: You are targeting the ACTIVE SELECTION range. Apply modifications only targeting elements present inside the active selection.' : 'If the user wants a global change (e.g. "change the entire font color to yellow"), you MUST generate "modifyStyle" commands for EVERY single paragraph index in the document.'}
@@ -1275,6 +1560,7 @@ User Request:
 	// Sequential, Animated, Interactive execution engine utilizing AddElement and RemoveElement
 	function executeSequentialEdits(changes) {
 		let i = 0;
+		let indexOffset = 0; // Dynamic tracking of index drift caused by creations, deletions, and Pastes
 		
 		function applyNext() {
 			if (i >= changes.length) {
@@ -1295,284 +1581,784 @@ User Request:
 
 			const change = changes[i];
 			const actionName = change.action || 'modifyStyle';
-			
+			const targetIndex = change.targetIndex;
+			const actualTargetIndex = targetIndex + indexOffset;
+
+			// Store variables in Asc scope for callback retrieval
+			window.Asc.scope.change = change;
+			window.Asc.scope.actualTargetIndex = actualTargetIndex;
+
 			if (actionName === 'deleteParagraph') {
-				log(`Executing Action: [Delete] Element #${change.targetIndex + 1}...`, 'warning');
+				log(`Executing Action: [Delete] Element #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'warning');
+				window.Asc.plugin.callCommand(function() {
+					var actualTargetIndex = Asc.scope.actualTargetIndex;
+					var oDocument = Api.GetDocument();
+					var countBefore = oDocument.GetElementsCount();
+					try { oDocument.RemoveElement(actualTargetIndex); } catch(e) {}
+					var countAfter = oDocument.GetElementsCount();
+					return { countBefore: countBefore, countAfter: countAfter };
+				}, false, true, function(res) {
+					var delta = res ? (res.countAfter - res.countBefore) : -1;
+					indexOffset += delta;
+					log(`Dynamic Index Offset adjusted by ${delta}. Total offset: ${indexOffset}`, 'info');
+					i++;
+					setTimeout(applyNext, 500);
+				});
+				return;
 			} else if (actionName === 'createParagraph') {
-				log(`Executing Action: [Create] New Paragraph after #${change.targetIndex + 1}...`, 'success');
-			} else if (actionName === 'pasteHTML') {
-				log(`Executing Action: [Generative Typesetting] Elements starting at #${change.targetIndex + 1}...`, 'success');
-				// Pass variable through scope
-				window.Asc.scope.change = change;
+				log(`Executing Action: [Create] New Paragraph after #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'success');
 				window.Asc.plugin.callCommand(function() {
 					var change = Asc.scope.change;
+					var actualTargetIndex = Asc.scope.actualTargetIndex;
 					var oDocument = Api.GetDocument();
-					var oParagraph = oDocument.GetElement(change.targetIndex);
+					var countBefore = oDocument.GetElementsCount();
+					
+					// Re-establish original styling as fallbacks
+					var origFont = "Calibri";
+					var origSize = 22;
+					var origBold = false;
+					var origItalic = false;
+					var origUnderline = false;
+					var origStrikeout = false;
+					var origColorHex = "#000000";
+					var origHighlight = "none";
+					
+					var oRefParagraph = oDocument.GetElement(actualTargetIndex);
+					if (oRefParagraph) {
+						try {
+							var runCount = oRefParagraph.GetElementsCount();
+							if (runCount > 0) {
+								var firstRun = oRefParagraph.GetElement(0);
+								if (firstRun) {
+									var textPr = null;
+									try { if (typeof firstRun.GetTextPr === "function") textPr = firstRun.GetTextPr(); } catch(e) {}
+									if (textPr) {
+										try { 
+											if (typeof textPr.GetFontName === "function") {
+												origFont = textPr.GetFontName() || origFont;
+											} else if (typeof textPr.GetFontFamily === "function") {
+												origFont = textPr.GetFontFamily() || origFont;
+											}
+										} catch(e) {}
+										try { if (typeof textPr.GetFontSize === "function") origSize = textPr.GetFontSize() || origSize; } catch(e) {}
+										try { if (typeof textPr.GetBold === "function") origBold = textPr.GetBold() || origBold; } catch(e) {}
+										try { if (typeof textPr.GetItalic === "function") origItalic = textPr.GetItalic() || origItalic; } catch(e) {}
+										try { if (typeof textPr.GetUnderline === "function") origUnderline = !!textPr.GetUnderline(); } catch(e) {}
+										try { if (typeof textPr.GetStrikeout === "function") origStrikeout = !!textPr.GetStrikeout(); } catch(e) {}
+										try {
+											if (typeof textPr.GetColor === "function") {
+												var c = textPr.GetColor();
+												if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
+											}
+										} catch(e) {}
+										try {
+											if (typeof textPr.GetHighlight === "function") {
+												var hl = textPr.GetHighlight();
+												if (hl) {
+													if (typeof hl === "string") origHighlight = hl;
+													else if (typeof hl.GetHex === "function") origHighlight = hl.GetHex() || origHighlight;
+												}
+											}
+										} catch(e) {}
+									}
+								}
+							}
+						} catch(e) {}
+					}
+					
+					var oNewParagraph = Api.CreateParagraph();
+					var oProps = change.properties || {};
+					try {
+						oDocument.AddElement(actualTargetIndex + 1, oNewParagraph);
+						oNewParagraph.Select();
+						
+						if (oProps.newText) {
+							// Embedded Upgraded HTML/CSS tag Parser
+							parseAndApplyTextWithTags(oNewParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
+						}
+					} catch(e) {}
+					
+					var countAfter = oDocument.GetElementsCount();
+					return { countBefore: countBefore, countAfter: countAfter };
+					
+					// Embedded Upgraded HTML/CSS tag Parser inside ONLYOFFICE sandbox context
+					function parseAndApplyTextWithTags(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
+						try { oPar.RemoveAllElements(); } catch(e) {}
+						var regex = /(<[^>]+>)/g;
+						var parts = htmlStr.split(regex);
+						var formatState = {
+							fontName: pProps.fontName || defFont || "Calibri",
+							fontSize: pProps.fontSize || defSize || 22,
+							bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
+							italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
+							underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
+							strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
+							doubleStrikeout: pProps.doubleStrikeout !== undefined ? pProps.doubleStrikeout : false,
+							smallCaps: pProps.smallCaps !== undefined ? pProps.smallCaps : false,
+							caps: pProps.caps !== undefined ? pProps.caps : false,
+							subscript: pProps.subscript !== undefined ? pProps.subscript : false,
+							superscript: pProps.superscript !== undefined ? pProps.superscript : false,
+							characterSpacing: pProps.characterSpacing !== undefined ? pProps.characterSpacing : 0,
+							color: pProps.color || defColorHex || "#000000",
+							highlight: pProps.highlight || defHighlight || "none"
+						};
+						var stateStack = [JSON.parse(JSON.stringify(formatState))];
+						
+						for (var idx = 0; idx < parts.length; idx++) {
+							var part = parts[idx];
+							if (!part) continue;
+							
+							if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
+								var tagLower = part.toLowerCase();
+								if (tagLower.indexOf("</") === 0) {
+									if (stateStack.length > 1) {
+										stateStack.pop();
+										formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
+									}
+								} else {
+									var newState = JSON.parse(JSON.stringify(formatState));
+									if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
+										newState.bold = true;
+									} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
+										newState.italic = true;
+									} else if (tagLower.indexOf("<u") === 0) {
+										newState.underline = true;
+									} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
+										newState.strikeout = true;
+									} else if (tagLower.indexOf("<sub>") === 0) {
+										newState.subscript = true;
+										newState.superscript = false;
+									} else if (tagLower.indexOf("<sup>") === 0) {
+										newState.superscript = true;
+										newState.subscript = false;
+									} else if (tagLower.indexOf("<small>") === 0) {
+										newState.smallCaps = true;
+									} else if (tagLower.indexOf("<big>") === 0) {
+										newState.caps = true;
+										newState.fontSize = Math.round(newState.fontSize * 1.2);
+									} else if (tagLower.indexOf("<font") === 0) {
+										var match = part.match(/color=["']([^"']+)["']/i);
+										if (match && match[1]) newState.color = match[1];
+										var matchFace = part.match(/face=["']([^"']+)["']/i);
+										if (matchFace && matchFace[1]) newState.fontName = matchFace[1];
+										var matchSize = part.match(/size=["']([^"']+)["']/i);
+										if (matchSize && matchSize[1]) newState.fontSize = parseFloat(matchSize[1]);
+									} else if (tagLower.indexOf("<mark") === 0) {
+										var match = part.match(/color=["']([^"']+)["']/i);
+										var styleMatch = part.match(/style=["']([^"']+)["']/i);
+										if (match && match[1]) {
+											newState.highlight = match[1];
+										} else if (styleMatch && styleMatch[1]) {
+											var styleStr = styleMatch[1];
+											var declarations = styleStr.split(';');
+											var foundBg = false;
+											for (var d = 0; d < declarations.length; d++) {
+												var dec = declarations[d].trim();
+												if (!dec) continue;
+												var pSplit = dec.split(':');
+												if (pSplit.length >= 2) {
+													var propName = pSplit[0].trim().toLowerCase();
+													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+													if (propName === 'background-color' || propName === 'background' || propName === 'color') {
+														newState.highlight = propVal;
+														foundBg = true;
+													}
+												}
+											}
+											if (!foundBg) newState.highlight = "yellow";
+										} else {
+											newState.highlight = "yellow";
+										}
+									} else if (tagLower.indexOf("<span") === 0) {
+										// Parse style attribute rules natively
+										var styleMatch = part.match(/style=["']([^"']+)["']/i);
+										if (styleMatch && styleMatch[1]) {
+											var styleStr = styleMatch[1];
+											var declarations = styleStr.split(';');
+											for (var d = 0; d < declarations.length; d++) {
+												var dec = declarations[d].trim();
+												if (!dec) continue;
+												var pSplit = dec.split(':');
+												if (pSplit.length >= 2) {
+													var propName = pSplit[0].trim().toLowerCase();
+													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+													
+													if (propName === 'font-weight') {
+														if (propVal === 'bold' || propVal === '700' || propVal === '800' || propVal === '900') newState.bold = true;
+														else if (propVal === 'normal' || propVal === '400') newState.bold = false;
+													} else if (propName === 'font-style') {
+														if (propVal === 'italic' || propVal === 'oblique') newState.italic = true;
+														else if (propVal === 'normal') newState.italic = false;
+													} else if (propName === 'text-decoration') {
+														if (propVal.indexOf('underline') !== -1) newState.underline = true;
+														if (propVal.indexOf('line-through') !== -1) newState.strikeout = true;
+														if (propVal.indexOf('double-line-through') !== -1 || propVal.indexOf('double') !== -1) newState.doubleStrikeout = true;
+													} else if (propName === 'color') {
+														newState.color = propVal;
+													} else if (propName === 'background-color' || propName === 'background') {
+														newState.highlight = propVal;
+													} else if (propName === 'font-family') {
+														newState.fontName = propVal.replace(/['"]/g, '').trim();
+													} else if (propName === 'font-size') {
+														var numVal = parseFloat(propVal);
+														if (propVal.indexOf('pt') !== -1) {
+															newState.fontSize = Math.round(numVal * 2);
+														} else if (propVal.indexOf('px') !== -1) {
+															newState.fontSize = Math.round(numVal * 1.5);
+														}
+													} else if (propName === 'letter-spacing') {
+														var numVal = parseFloat(propVal);
+														if (propVal.indexOf('pt') !== -1) {
+															newState.characterSpacing = Math.round(numVal * 20); // 1pt letter-spacing = 20 dxa character spacing
+														} else if (propVal.indexOf('px') !== -1) {
+															newState.characterSpacing = Math.round(numVal * 15);
+														} else {
+															newState.characterSpacing = Math.round(numVal);
+														}
+													} else if (propName === 'text-transform') {
+														if (propVal === 'uppercase') newState.caps = true;
+														else if (propVal === 'lowercase') newState.caps = false;
+													} else if (propName === 'font-variant') {
+														if (propVal === 'small-caps') newState.smallCaps = true;
+													} else if (propName === 'vertical-align') {
+														if (propVal === 'super') {
+															newState.superscript = true;
+															newState.subscript = false;
+														} else if (propVal === 'sub') {
+															newState.subscript = true;
+															newState.superscript = false;
+														}
+													}
+												}
+											}
+										}
+									}
+									stateStack.push(newState);
+									formatState = newState;
+								}
+							} else {
+								var decText = part
+									.replace(/&quot;/g, '"')
+									.replace(/&lt;/g, '<')
+									.replace(/&gt;/g, '>')
+									.replace(/&amp;/g, '&')
+									.replace(/&#39;/g, "'")
+									.replace(/&apos;/g, "'");
+									
+								var oRun = null;
+								try { oRun = oPar.AddText(decText); } catch(eText) {}
+								if (oRun) {
+									if (formatState.fontName) {
+										try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+									}
+									if (formatState.fontSize) {
+										try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+									}
+									try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+									try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+									try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+									try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+									try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+									try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+									try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+									try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+									try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+									try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+									
+									if (formatState.highlight) {
+										try {
+											var hl = formatState.highlight.toLowerCase().trim();
+											if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+											else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+											else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+											else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+											else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+											else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+											else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+											else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+											else oRun.SetHighlight(hl);
+										} catch(eHighlight) {}
+									}
+									
+									if (formatState.color) {
+										try {
+											var hex = String(formatState.color).replace('#', '').trim();
+											if (hex.length === 6) {
+												var r = parseInt(hex.substring(0, 2), 16);
+												var g = parseInt(hex.substring(2, 4), 16);
+												var b = parseInt(hex.substring(4, 6), 16);
+												try { oRun.SetColor(Api.CreateColorFromRGB(r, g, b)); } catch(eColor) {
+													try { oRun.SetColor(r, g, b); } catch(errHex) {}
+												}
+											} else {
+												var namedColors = {
+													"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+													"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+													"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+												};
+												if (namedColors[hex.toLowerCase()]) {
+													var rgb = namedColors[hex.toLowerCase()];
+													oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+												}
+											}
+										} catch(eColorOuter) {}
+									}
+								}
+							}
+						}
+					}
+				}, false, true, function(res) {
+					var delta = res ? (res.countAfter - res.countBefore) : 1;
+					indexOffset += delta;
+					log(`Dynamic Index Offset adjusted by ${delta}. Total offset: ${indexOffset}`, 'info');
+					i++;
+					setTimeout(applyNext, 500);
+				});
+				return;
+			} else if (actionName === 'pasteHTML') {
+				log(`Executing Action: [Generative Typesetting] Elements starting at #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'success');
+				// Measure element count before PasteHtml
+				window.Asc.plugin.callCommand(function() {
+					var actualTargetIndex = Asc.scope.actualTargetIndex;
+					var oDocument = Api.GetDocument();
+					var oParagraph = oDocument.GetElement(actualTargetIndex);
 					if (oParagraph) {
 						oParagraph.Select();
 					}
-					return "selected";
-				}, false, true, function() {
+					return oDocument.GetElementsCount();
+				}, false, true, function(countBefore) {
 					// Call PasteHtml natively on the parent plugin object
 					window.Asc.plugin.executeMethod("PasteHtml", [change.properties.html || ''], function() {
-						i++;
-						setTimeout(applyNext, 300);
+						// Measure element count after PasteHtml completes to dynamically calculate paragraph drift
+						window.Asc.plugin.callCommand(function() {
+							return Api.GetDocument().GetElementsCount();
+						}, false, true, function(countAfter) {
+							var delta = (countAfter !== undefined && countBefore !== undefined) ? (countAfter - countBefore) : 0;
+							indexOffset += delta;
+							log(`Dynamic Index Offset adjusted by ${delta} after PasteHtml. Total offset: ${indexOffset}`, 'info');
+							i++;
+							setTimeout(applyNext, 300);
+						});
 					});
 				});
 				return;
 			} else {
-				log(`Executing Action: [Formatting] Element #${change.targetIndex + 1}...`, 'info');
-			}
-
-			// Pass variables through scope
-			window.Asc.scope.change = change;
-
-			window.Asc.plugin.callCommand(function() {
-				// Helper to parse HTML tags and build individual runs dynamically in the paragraph
-				function parseAndApplyTextWithTags(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, pProps) {
-					try { oPar.RemoveAllElements(); } catch(e) {}
-					var regex = /(<[^>]+>)/g;
-					var parts = htmlStr.split(regex);
-					var formatState = {
-						fontName: pProps.fontName || defFont || "Calibri",
-						fontSize: pProps.fontSize || defSize || 22,
-						bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
-						italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
-						underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
-						strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
-						color: pProps.color || defColorHex || "#000000",
-						highlight: pProps.highlight || "none"
-					};
-					var stateStack = [JSON.parse(JSON.stringify(formatState))];
+				log(`Executing Action: [Formatting] Element #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'info');
+				window.Asc.plugin.callCommand(function() {
+					var change = Asc.scope.change;
+					var actualTargetIndex = Asc.scope.actualTargetIndex;
+					var oDocument = Api.GetDocument();
+					var oParagraph = oDocument.GetElement(actualTargetIndex);
 					
-					for (var idx = 0; idx < parts.length; idx++) {
-						var part = parts[idx];
-						if (!part) continue;
-						
-						if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
-							var tagLower = part.toLowerCase();
-							if (tagLower.indexOf("</") === 0) {
-								if (stateStack.length > 1) {
-									stateStack.pop();
-									formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
-								}
-							} else {
-								var newState = JSON.parse(JSON.stringify(formatState));
-								if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
-									newState.bold = true;
-								} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
-									newState.italic = true;
-								} else if (tagLower.indexOf("<u") === 0) {
-									newState.underline = true;
-								} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
-									newState.strikeout = true;
-								} else if (tagLower.indexOf("<font") === 0) {
-									var match = part.match(/color=["']([^"']+)["']/i);
-									if (match && match[1]) newState.color = match[1];
-								} else if (tagLower.indexOf("<mark") === 0) {
-									var match = part.match(/color=["']([^"']+)["']/i);
-									if (match && match[1]) {
-										newState.highlight = match[1];
-									} else {
-										newState.highlight = "yellow";
+					// Re-establish original styling as fallbacks
+					var origFont = "Calibri";
+					var origSize = 22;
+					var origBold = false;
+					var origItalic = false;
+					var origUnderline = false;
+					var origStrikeout = false;
+					var origColorHex = "#000000";
+					var origHighlight = "none";
+					
+					if (oParagraph) {
+						try {
+							var runCount = oParagraph.GetElementsCount();
+							if (runCount > 0) {
+								var firstRun = oParagraph.GetElement(0);
+								if (firstRun) {
+									var textPr = null;
+									try { if (typeof firstRun.GetTextPr === "function") textPr = firstRun.GetTextPr(); } catch(e) {}
+									if (textPr) {
+										try { 
+											if (typeof textPr.GetFontName === "function") {
+												origFont = textPr.GetFontName() || origFont;
+											} else if (typeof textPr.GetFontFamily === "function") {
+												origFont = textPr.GetFontFamily() || origFont;
+											}
+										} catch(e) {}
+										try { if (typeof textPr.GetFontSize === "function") origSize = textPr.GetFontSize() || origSize; } catch(e) {}
+										try { if (typeof textPr.GetBold === "function") origBold = textPr.GetBold() || origBold; } catch(e) {}
+										try { if (typeof textPr.GetItalic === "function") origItalic = textPr.GetItalic() || origItalic; } catch(e) {}
+										try { if (typeof textPr.GetUnderline === "function") origUnderline = !!textPr.GetUnderline(); } catch(e) {}
+										try { if (typeof textPr.GetStrikeout === "function") origStrikeout = !!textPr.GetStrikeout(); } catch(e) {}
+										try {
+											if (typeof textPr.GetColor === "function") {
+												var c = textPr.GetColor();
+												if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
+											}
+										} catch(e) {}
+										try {
+											if (typeof textPr.GetHighlight === "function") {
+												var hl = textPr.GetHighlight();
+												if (hl) {
+													if (typeof hl === "string") origHighlight = hl;
+													else if (typeof hl.GetHex === "function") origHighlight = hl.GetHex() || origHighlight;
+												}
+											}
+										} catch(e) {}
 									}
 								}
-								stateStack.push(newState);
-								formatState = newState;
 							}
-						} else {
-							var decText = part
-								.replace(/&quot;/g, '"')
-								.replace(/&lt;/g, '<')
-								.replace(/&gt;/g, '>')
-								.replace(/&amp;/g, '&')
-								.replace(/&#39;/g, "'")
-								.replace(/&apos;/g, "'");
-								
-							var oRun = null;
-							try { oRun = oPar.AddText(decText); } catch(eText) {}
-							if (oRun) {
-								if (formatState.fontName) {
-									try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+						} catch(e) {}
+						
+						try { oParagraph.Select(); } catch(e) {}
+						
+						var oProps = change.properties || {};
+						try {
+							if (oProps.newText !== undefined) {
+								parseAndApplyTextWithTags(oParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
+							} else {
+								// Directly apply styles to existing runs without recreating/destroying them!
+								var runCount = oParagraph.GetElementsCount();
+								for (var r = 0; r < runCount; r++) {
+									var oRun = oParagraph.GetElement(r);
+									if (oRun && oRun.GetClassType() === "run") {
+										if (oProps.fontName !== undefined) {
+											try { oRun.SetFontName(oProps.fontName); } catch(e) {}
+										}
+										if (oProps.fontSize !== undefined) {
+											try { oRun.SetFontSize(oProps.fontSize); } catch(e) {}
+										}
+										if (oProps.bold !== undefined) {
+											try { oRun.SetBold(!!oProps.bold); } catch(e) {}
+										}
+										if (oProps.italic !== undefined) {
+											try { oRun.SetItalic(!!oProps.italic); } catch(e) {}
+										}
+										if (oProps.underline !== undefined) {
+											try { oRun.SetUnderline(!!oProps.underline); } catch(e) {}
+										}
+										if (oProps.strikeout !== undefined) {
+											try { oRun.SetStrikeout(!!oProps.strikeout); } catch(e) {}
+										}
+										if (oProps.doubleStrikeout !== undefined) {
+											try { oRun.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
+										}
+										if (oProps.smallCaps !== undefined) {
+											try { oRun.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
+										}
+										if (oProps.caps !== undefined) {
+											try { oRun.SetCaps(!!oProps.caps); } catch(e) {}
+										}
+										if (oProps.subscript !== undefined) {
+											try { oRun.SetSubscript(!!oProps.subscript); } catch(e) {}
+										}
+										if (oProps.superscript !== undefined) {
+											try { oRun.SetSuperscript(!!oProps.superscript); } catch(e) {}
+										}
+										if (oProps.characterSpacing !== undefined) {
+											try { oRun.SetSpacing(oProps.characterSpacing); } catch(e) {}
+										}
+										if (oProps.highlight !== undefined) {
+											try {
+												var hl = oProps.highlight.toLowerCase().trim();
+												if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+												else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+												else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+												else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+												else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+												else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+												else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+												else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+												else oRun.SetHighlight(hl);
+											} catch(eHighlight) {}
+										}
+										if (oProps.color !== undefined) {
+											try {
+												var hex = String(oProps.color).replace('#', '').trim();
+												if (hex.length === 6) {
+													var red = parseInt(hex.substring(0, 2), 16);
+													var green = parseInt(hex.substring(2, 4), 16);
+													var blue = parseInt(hex.substring(4, 6), 16);
+													try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+														try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+													}
+												} else {
+													var namedColors = {
+														"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+														"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+														"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+													};
+													if (namedColors[hex.toLowerCase()]) {
+														var rgb = namedColors[hex.toLowerCase()];
+														oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+													}
+												}
+											} catch(eColorOuter) {}
+										}
+									}
 								}
-								if (formatState.fontSize) {
-									try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+							}
+						} catch(e) {}
+
+						// Apply paragraph-level styling
+						try {
+							if (oProps.alignment) {
+								var jc = oProps.alignment;
+								if (jc === "justify") jc = "both";
+								if (typeof oParagraph.SetJc === "function") oParagraph.SetJc(jc);
+							}
+						} catch(e) {}
+						try { if (oProps.spacingAfter !== undefined && oParagraph.SetSpacingAfter) oParagraph.SetSpacingAfter(oProps.spacingAfter); } catch(e) {}
+						try { if (oProps.spacingBefore !== undefined && oParagraph.SetSpacingBefore) oParagraph.SetSpacingBefore(oProps.spacingBefore); } catch(e) {}
+						try {
+							if (oProps.lineSpacing !== undefined && oParagraph.SetSpacingLine) {
+								var rule = oProps.lineSpacingRule || "auto";
+								var val = oProps.lineSpacingTwips || Math.round(oProps.lineSpacing * 240);
+								oParagraph.SetSpacingLine(val, rule);
+							}
+						} catch(e) {}
+						try { if (oProps.indLeft !== undefined && oParagraph.SetIndLeft) oParagraph.SetIndLeft(oProps.indLeft); } catch(e) {}
+						try { if (oProps.indRight !== undefined && oParagraph.SetIndRight) oParagraph.SetIndRight(oProps.indRight); } catch(e) {}
+						try { if (oProps.indFirstLine !== undefined && oParagraph.SetIndFirstLine) oParagraph.SetIndFirstLine(oProps.indFirstLine); } catch(e) {}
+						try {
+							if (oProps.shading !== undefined && oParagraph.SetShd) {
+								var hex = String(oProps.shading).replace('#', '').trim();
+								if (hex.length === 6) {
+									var r = parseInt(hex.substring(0, 2), 16);
+									var g = parseInt(hex.substring(2, 4), 16);
+									var b = parseInt(hex.substring(4, 6), 16);
+									try { oParagraph.SetShd(r, g, b); } catch(eShd) {
+										try { oParagraph.SetShd(Api.CreateColorFromRGB(r, g, b)); } catch(errShd) {}
+									}
 								}
-								try { oRun.SetBold(!!formatState.bold); } catch(e) {}
-								try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
-								try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
-								try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
-								
-								if (formatState.highlight) {
-									try {
-										var hl = formatState.highlight.toLowerCase();
-										if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
-										else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
-										else if (hl.indexOf("green") !== -1 || hl === "#00ff00") oRun.SetHighlight("green");
-										else if (hl.indexOf("blue") !== -1 || hl === "#0000ff" || hl === "#00ffff") oRun.SetHighlight("cyan");
-										else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
-										else oRun.SetHighlight(hl);
-									} catch(eHighlight) {}
-								}
-								
-								if (formatState.color) {
-									try {
-										var hex = String(formatState.color).replace('#', '');
-										if (hex.length === 6) {
-											var r = parseInt(hex.substring(0, 2), 16);
-											var g = parseInt(hex.substring(2, 4), 16);
-											var b = parseInt(hex.substring(4, 6), 16);
-											try { oRun.SetColor(Api.CreateColorFromRGB(r, g, b)); } catch(eColor) {
-												try { oRun.SetColor(r, g, b); } catch(errHex) {}
+							}
+						} catch(e) {}
+					}
+					
+					return "success";
+					
+					// Embedded Upgraded HTML/CSS tag Parser inside ONLYOFFICE sandbox context
+					function parseAndApplyTextWithTags(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
+						try { oPar.RemoveAllElements(); } catch(e) {}
+						var regex = /(<[^>]+>)/g;
+						var parts = htmlStr.split(regex);
+						var formatState = {
+							fontName: pProps.fontName || defFont || "Calibri",
+							fontSize: pProps.fontSize || defSize || 22,
+							bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
+							italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
+							underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
+							strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
+							doubleStrikeout: pProps.doubleStrikeout !== undefined ? pProps.doubleStrikeout : false,
+							smallCaps: pProps.smallCaps !== undefined ? pProps.smallCaps : false,
+							caps: pProps.caps !== undefined ? pProps.caps : false,
+							subscript: pProps.subscript !== undefined ? pProps.subscript : false,
+							superscript: pProps.superscript !== undefined ? pProps.superscript : false,
+							characterSpacing: pProps.characterSpacing !== undefined ? pProps.characterSpacing : 0,
+							color: pProps.color || defColorHex || "#000000",
+							highlight: pProps.highlight || defHighlight || "none"
+						};
+						var stateStack = [JSON.parse(JSON.stringify(formatState))];
+						
+						for (var idx = 0; idx < parts.length; idx++) {
+							var part = parts[idx];
+							if (!part) continue;
+							
+							if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
+								var tagLower = part.toLowerCase();
+								if (tagLower.indexOf("</") === 0) {
+									if (stateStack.length > 1) {
+										stateStack.pop();
+										formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
+									}
+								} else {
+									var newState = JSON.parse(JSON.stringify(formatState));
+									if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
+										newState.bold = true;
+									} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
+										newState.italic = true;
+									} else if (tagLower.indexOf("<u") === 0) {
+										newState.underline = true;
+									} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
+										newState.strikeout = true;
+									} else if (tagLower.indexOf("<sub>") === 0) {
+										newState.subscript = true;
+										newState.superscript = false;
+									} else if (tagLower.indexOf("<sup>") === 0) {
+										newState.superscript = true;
+										newState.subscript = false;
+									} else if (tagLower.indexOf("<small>") === 0) {
+										newState.smallCaps = true;
+									} else if (tagLower.indexOf("<big>") === 0) {
+										newState.caps = true;
+										newState.fontSize = Math.round(newState.fontSize * 1.2);
+									} else if (tagLower.indexOf("<font") === 0) {
+										var match = part.match(/color=["']([^"']+)["']/i);
+										if (match && match[1]) newState.color = match[1];
+										var matchFace = part.match(/face=["']([^"']+)["']/i);
+										if (matchFace && matchFace[1]) newState.fontName = matchFace[1];
+										var matchSize = part.match(/size=["']([^"']+)["']/i);
+										if (matchSize && matchSize[1]) newState.fontSize = parseFloat(matchSize[1]);
+									} else if (tagLower.indexOf("<mark") === 0) {
+										var match = part.match(/color=["']([^"']+)["']/i);
+										var styleMatch = part.match(/style=["']([^"']+)["']/i);
+										if (match && match[1]) {
+											newState.highlight = match[1];
+										} else if (styleMatch && styleMatch[1]) {
+											var styleStr = styleMatch[1];
+											var declarations = styleStr.split(';');
+											var foundBg = false;
+											for (var d = 0; d < declarations.length; d++) {
+												var dec = declarations[d].trim();
+												if (!dec) continue;
+												var pSplit = dec.split(':');
+												if (pSplit.length >= 2) {
+													var propName = pSplit[0].trim().toLowerCase();
+													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+													if (propName === 'background-color' || propName === 'background' || propName === 'color') {
+														newState.highlight = propVal;
+														foundBg = true;
+													}
+												}
+											}
+											if (!foundBg) newState.highlight = "yellow";
+										} else {
+											newState.highlight = "yellow";
+										}
+									} else if (tagLower.indexOf("<span") === 0) {
+										// Parse style attribute rules natively
+										var styleMatch = part.match(/style=["']([^"']+)["']/i);
+										if (styleMatch && styleMatch[1]) {
+											var styleStr = styleMatch[1];
+											var declarations = styleStr.split(';');
+											for (var d = 0; d < declarations.length; d++) {
+												var dec = declarations[d].trim();
+												if (!dec) continue;
+												var pSplit = dec.split(':');
+												if (pSplit.length >= 2) {
+													var propName = pSplit[0].trim().toLowerCase();
+													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+													
+													if (propName === 'font-weight') {
+														if (propVal === 'bold' || propVal === '700' || propVal === '800' || propVal === '900') newState.bold = true;
+														else if (propVal === 'normal' || propVal === '400') newState.bold = false;
+													} else if (propName === 'font-style') {
+														if (propVal === 'italic' || propVal === 'oblique') newState.italic = true;
+														else if (propVal === 'normal') newState.italic = false;
+													} else if (propName === 'text-decoration') {
+														if (propVal.indexOf('underline') !== -1) newState.underline = true;
+														if (propVal.indexOf('line-through') !== -1) newState.strikeout = true;
+														if (propVal.indexOf('double-line-through') !== -1 || propVal.indexOf('double') !== -1) newState.doubleStrikeout = true;
+													} else if (propName === 'color') {
+														newState.color = propVal;
+													} else if (propName === 'background-color' || propName === 'background') {
+														newState.highlight = propVal;
+													} else if (propName === 'font-family') {
+														newState.fontName = propVal.replace(/['"]/g, '').trim();
+													} else if (propName === 'font-size') {
+														var numVal = parseFloat(propVal);
+														if (propVal.indexOf('pt') !== -1) {
+															newState.fontSize = Math.round(numVal * 2);
+														} else if (propVal.indexOf('px') !== -1) {
+															newState.fontSize = Math.round(numVal * 1.5);
+														}
+													} else if (propName === 'letter-spacing') {
+														var numVal = parseFloat(propVal);
+														if (propVal.indexOf('pt') !== -1) {
+															newState.characterSpacing = Math.round(numVal * 20); // 1pt letter-spacing = 20 dxa character spacing
+														} else if (propVal.indexOf('px') !== -1) {
+															newState.characterSpacing = Math.round(numVal * 15);
+														} else {
+															newState.characterSpacing = Math.round(numVal);
+														}
+													} else if (propName === 'text-transform') {
+														if (propVal === 'uppercase') newState.caps = true;
+														else if (propVal === 'lowercase') newState.caps = false;
+													} else if (propName === 'font-variant') {
+														if (propVal === 'small-caps') newState.smallCaps = true;
+													} else if (propName === 'vertical-align') {
+														if (propVal === 'super') {
+															newState.superscript = true;
+															newState.subscript = false;
+														} else if (propVal === 'sub') {
+															newState.subscript = true;
+															newState.superscript = false;
+														}
+													}
+												}
 											}
 										}
-									} catch(eColorOuter) {}
+									}
+									stateStack.push(newState);
+									formatState = newState;
+								}
+							} else {
+								var decText = part
+									.replace(/&quot;/g, '"')
+									.replace(/&lt;/g, '<')
+									.replace(/&gt;/g, '>')
+									.replace(/&amp;/g, '&')
+									.replace(/&#39;/g, "'")
+									.replace(/&apos;/g, "'");
+									
+								var oRun = null;
+								try { oRun = oPar.AddText(decText); } catch(eText) {}
+								if (oRun) {
+									if (formatState.fontName) {
+										try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+									}
+									if (formatState.fontSize) {
+										try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+									}
+									try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+									try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+									try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+									try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+									try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+									try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+									try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+									try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+									try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+									try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+									
+									if (formatState.highlight) {
+										try {
+											var hl = formatState.highlight.toLowerCase().trim();
+											if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+											else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+											else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+											else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+											else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+											else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+											else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+											else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+											else oRun.SetHighlight(hl);
+										} catch(eHighlight) {}
+									}
+									
+									if (formatState.color) {
+										try {
+											var hex = String(formatState.color).replace('#', '').trim();
+											if (hex.length === 6) {
+												var r = parseInt(hex.substring(0, 2), 16);
+												var g = parseInt(hex.substring(2, 4), 16);
+												var b = parseInt(hex.substring(4, 6), 16);
+												try { oRun.SetColor(Api.CreateColorFromRGB(r, g, b)); } catch(eColor) {
+													try { oRun.SetColor(r, g, b); } catch(errHex) {}
+												}
+											} else {
+												var namedColors = {
+													"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+													"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+													"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+												};
+												if (namedColors[hex.toLowerCase()]) {
+													var rgb = namedColors[hex.toLowerCase()];
+													oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+												}
+											}
+										} catch(eColorOuter) {}
+									}
 								}
 							}
 						}
 					}
-				}
-
-				var change = Asc.scope.change;
-				var oDocument = Api.GetDocument();
-				var oParagraph = oDocument.GetElement(change.targetIndex);
-				
-				// Extract original styles safely first so all actions can access them
-				var origFont = "Calibri";
-				var origSize = 22;
-				var origBold = false;
-				var origItalic = false;
-				var origUnderline = false;
-				var origStrikeout = false;
-				var origColorHex = "#000000";
-				
-				if (oParagraph) {
-					try {
-						var runCount = oParagraph.GetElementsCount();
-						if (runCount > 0) {
-							var firstRun = oParagraph.GetElement(0);
-							if (firstRun) {
-								var textPr = null;
-								try {
-									if (typeof firstRun.GetTextPr === "function") textPr = firstRun.GetTextPr();
-								} catch(eTextPr) {}
-								
-								if (textPr) {
-									try {
-										if (typeof textPr.GetFontFamily === "function") origFont = textPr.GetFontFamily() || origFont;
-										else if (typeof textPr.GetFontNames === "function") {
-											var names = textPr.GetFontNames();
-											if (names && names.length > 0) origFont = names[0] || origFont;
-										}
-									} catch(eFont) {}
-									
-									try {
-										if (typeof textPr.GetFontSize === "function") origSize = textPr.GetFontSize() || origSize;
-									} catch(eSize) {}
-									
-									try {
-										if (typeof textPr.GetBold === "function") origBold = textPr.GetBold() || origBold;
-									} catch(eBold) {}
-									
-									try {
-										if (typeof textPr.GetItalic === "function") origItalic = textPr.GetItalic() || origItalic;
-									} catch(eItalic) {}
-									
-									try {
-										if (typeof textPr.GetUnderline === "function") origUnderline = !!textPr.GetUnderline();
-									} catch(eUnderline) {}
-									
-									try {
-										if (typeof textPr.GetStrikeout === "function") origStrikeout = !!textPr.GetStrikeout();
-									} catch(eStrikeout) {}
-									
-									try {
-										if (typeof textPr.GetColor === "function") {
-											var c = textPr.GetColor();
-											if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
-										}
-									} catch(eColor) {}
-								} else {
-									try { if (typeof firstRun.GetFontName === "function") origFont = firstRun.GetFontName() || origFont; } catch(e) {}
-									try { if (typeof firstRun.GetFontSize === "function") origSize = firstRun.GetFontSize() || origSize; } catch(e) {}
-									try { if (typeof firstRun.GetBold === "function") origBold = firstRun.GetBold() || origBold; } catch(e) {}
-									try { if (typeof firstRun.GetItalic === "function") origItalic = firstRun.GetItalic() || origItalic; } catch(e) {}
-									try { if (typeof firstRun.GetUnderline === "function") origUnderline = !!firstRun.GetUnderline(); } catch(e) {}
-									try { if (typeof firstRun.GetStrikeout === "function") origStrikeout = !!firstRun.GetStrikeout(); } catch(e) {}
-									try {
-										if (typeof firstRun.GetColor === "function") {
-											var c = firstRun.GetColor();
-											if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
-										}
-									} catch(e) {}
-								}
-							}
-						}
-					} catch(eOuter) {}
-				}
-
-				if (change.action === 'deleteParagraph') {
-					try { oDocument.RemoveElement(change.targetIndex); } catch(e) {}
-					return "deleted";
-				}
-				
-				if (change.action === 'createParagraph') {
-					try {
-						var oNewParagraph = Api.CreateParagraph();
-						var oProps = change.properties || {};
-						oDocument.AddElement(change.targetIndex + 1, oNewParagraph);
-						oNewParagraph.Select();
-						
-						if (oProps.newText) {
-							parseAndApplyTextWithTags(oNewParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, oProps);
-						}
-					} catch(e) {}
-					return "created";
-				}
-
-				if (oParagraph) {
-					try {
-						// Focus/Scroll to active paragraph
-						oParagraph.Select();
-					} catch(e) {}
-					
-					var oProps = change.properties || {};
-					
-					// Direct run-level text and style updates to avoid selection dependencies
-					try {
-						if (oProps.newText !== undefined) {
-							parseAndApplyTextWithTags(oParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, oProps);
-						} else {
-							// Reconstruct run with existing text to guarantee robust styling application
-							var currentText = oParagraph.GetText() || "";
-							currentText = currentText.replace(/[\r\n]+$/, "");
-							parseAndApplyTextWithTags(oParagraph, currentText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, oProps);
-						}
-					} catch(e) {}
-
-					// Apply paragraph-level styling
-					try {
-						if (oProps.alignment) {
-							var jc = oProps.alignment;
-							if (jc === "justify") jc = "both";
-							if (typeof oParagraph.SetJc === "function") oParagraph.SetJc(jc);
-						}
-					} catch(e) {}
-					try { if (oProps.spacingAfter !== undefined && oParagraph.SetSpacingAfter) oParagraph.SetSpacingAfter(oProps.spacingAfter); } catch(e) {}
-					try { if (oProps.spacingBefore !== undefined && oParagraph.SetSpacingBefore) oParagraph.SetSpacingBefore(oProps.spacingBefore); } catch(e) {}
-					try {
-						if (oProps.lineSpacing !== undefined && oParagraph.SetSpacingLine) {
-							var rule = oProps.lineSpacingRule || "auto";
-							var val = oProps.lineSpacingTwips || Math.round(oProps.lineSpacing * 240);
-							oParagraph.SetSpacingLine(val, rule);
-						}
-					} catch(e) {}
-				}
-				return "success";
-			}, false, true, function(result) {
-				i++;
-				setTimeout(applyNext, 500);
-			});
+				}, false, true, function() {
+					i++;
+					setTimeout(applyNext, 500);
+				});
+			}
 		}
 
 		applyNext();
