@@ -344,7 +344,7 @@
   // Initialize ONLYOFFICE plugin hooks
   window.Asc.plugin.init = function () {
     loadLogFile();
-    log("super doc v3 PDK initialized.", "success");
+    log("S\\uper Editor v3 PDK initialized.", "success");
     loadSettings();
 
     // Attach to selection change event to dynamically update the JSON structure view instantly!
