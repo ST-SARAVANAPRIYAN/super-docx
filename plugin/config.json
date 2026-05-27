@@ -1,58 +1,62 @@
 {
-	"name": " Super Editor ",
-	"nameLocale": {
-		"ru": "Super Editor",
-		"fr": "Super Editor",
-		"es": "Super Editor",
-		"pt-BR": "Super Editor",
-		"de": "Super Editor",
-		"cs-CS": "Super Editor"
-	},
-	"guid": "asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}",
-	"version": "1.0.0",
-	"minVersion": "5.0.0",
+  "name": " Super Editor ",
+  "nameLocale": {
+    "ru": "Super Editor",
+    "fr": "Super Editor",
+    "es": "Super Editor",
+    "pt-BR": "Super Editor",
+    "de": "Super Editor",
+    "cs-CS": "Super Editor"
+  },
+  "author": "A fellow dev",
+  "authorLocale": {
+    "en": "A fellow dev"
+  },
+  "guid": "asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}",
+  "version": "1.0.0",
+  "minVersion": "5.0.0",
 
-	"variations": [
-		{
-			"description": "Autonomous AI formatting and editing powered by the Groq API.",
-			"descriptionLocale": {
-				"ru": "Автономное ИИ форматирование и редактирование на базе Groq API."
-			},
-			"url": "index.html",
+  "variations": [
+    {
+      "description": "Autonomous AI formatting and editing powered by the Groq API.",
+      "descriptionLocale": {
+        "ru": "Автономное ИИ форматирование и редактирование на базе Groq API."
+      },
+      "url": "index.html",
 
-			"icons": [ "resources/img/icon.png", "resources/img/icon@2x.png" ],
-			"icons2": [
-				{
-					"100%": { "normal": "resources/img/icon.png" },
-					"200%": { "normal": "resources/img/icon@2x.png" }
-				}
-			],
-			"isViewer": false,
-			"EditorsSupport": [ "word" ],
+      "icons": ["resources/img/icon.png", "resources/img/icon@2x.png"],
+      "icons2": [
+        {
+          "100%": { "normal": "resources/img/icon.png" },
+          "200%": { "normal": "resources/img/icon@2x.png" }
+        }
+      ],
+      "isViewer": false,
+      "EditorsSupport": ["word"],
 
-			"isVisual": true,
-			"isModal": false,
-			"isInsideMode": true,
+      "isVisual": true,
+      "isModal": false,
+      "isInsideMode": true,
 
-			"initDataType": "text",
-			"initData": "",
+      "initDataType": "text",
+      "initData": "",
 
-			"isUpdateOleOnResize": false,
+      "isUpdateOleOnResize": false,
 
-			"buttons": [],
-			"initOnSelectionChanged": true,
-			"store": {
-				"background": {
-					"light" : "#f59e0b",
-					"dark" : "#d97706"
-				},
-				"screenshots" : [],
-				"icons" : {
-					"light" : "resources/img",
-					"dark"  : "resources/img"
-				},
-				"categories": ["specAbilities", "work"]
-			}
-		}
-	]
+      "buttons": [],
+      "initOnSelectionChanged": true,
+      "store": {
+        "background": {
+          "light": "#f59e0b",
+          "dark": "#d97706"
+        },
+        "screenshots": [],
+        "icons": {
+          "light": "resources/img",
+          "dark": "resources/img"
+        },
+        "categories": ["specAbilities", "work"]
+      }
+    }
+  ]
 }
