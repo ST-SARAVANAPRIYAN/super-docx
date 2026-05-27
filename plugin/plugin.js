@@ -23,6 +23,7 @@
 	const executeBtn = document.getElementById('execute-btn');
 	const logContainer = document.getElementById('log-container');
 	const clearLogsBtn = document.getElementById('clear-logs');
+	const resetLogsBtn = document.getElementById('reset-logs');
 	
 	const changesCard = document.getElementById('changes-card');
 	const changesList = document.getElementById('changes-list');
@@ -32,6 +33,10 @@
 	// Undo / Redo selectors
 	const toolbarUndo = document.getElementById('toolbar-undo');
 	const toolbarRedo = document.getElementById('toolbar-redo');
+
+	// Persistent Log File
+	const logStorageKey = "super_docx_log_file";
+	let logLines = [];
 
 	// Scan Range is determined dynamically
 
@@ -149,19 +154,61 @@
 		});
 	});
 
-	// Clear Logs
-	clearLogsBtn.addEventListener('click', () => {
-		logContainer.innerHTML = '';
-		log('Developer logs cleared.', 'info');
-	});
+	// Logging persistence helpers
+	function loadLogFile() {
+		const savedLog = localStorage.getItem(logStorageKey);
+		logLines = savedLog ? savedLog.split('\n').filter(Boolean) : [];
+	}
+
+	function clearLogFile() {
+		logLines = [];
+		localStorage.removeItem(logStorageKey);
+		log('Developer log file cleared.', 'warning');
+	}
+
+	function downloadLogFile() {
+		const logContent = logLines.length > 0 ? logLines.join('\n') : "No log entries recorded yet.";
+		const blob = new Blob([logContent + '\n'], { type: 'text/plain;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `super-docx-log-${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 0);
+	}
+
+	// Persistent logs event handlers
+	if (clearLogsBtn) {
+		clearLogsBtn.addEventListener('click', () => {
+			downloadLogFile();
+			log('Downloaded the stored log file.', 'info');
+		});
+	}
+
+	if (resetLogsBtn) {
+		resetLogsBtn.addEventListener('click', () => {
+			clearLogFile();
+		});
+	}
 
 	// Logger helper
 	function log(message, type = 'default') {
-		const entry = document.createElement('div');
-		entry.className = `log-entry ${type}`;
-		entry.innerHTML = `<span>[${new Date().toLocaleTimeString()}]</span> <span>${message}</span>`;
-		logContainer.appendChild(entry);
-		logContainer.scrollTop = logContainer.scrollHeight;
+		const timestamp = new Date().toISOString();
+		const line = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+		logLines.push(line);
+		localStorage.setItem(logStorageKey, logLines.join('\n'));
+		if (typeof console !== 'undefined' && console.log) {
+			console.log(line);
+		}
+		if (logContainer) {
+			const entry = document.createElement('div');
+			entry.className = `log-entry ${type}`;
+			entry.innerHTML = `<span>[${new Date().toLocaleTimeString()}]</span> <span>${message}</span>`;
+			logContainer.appendChild(entry);
+			logContainer.scrollTop = logContainer.scrollHeight;
+		}
 	}
 
 	// Dynamic Document JSON Viewer compiler (debounced and fully dynamic)
@@ -305,7 +352,8 @@
 
 	// Initialize ONLYOFFICE plugin hooks
 	window.Asc.plugin.init = function() {
-		log('Groq AI Copilot v3 PDK initialized.', 'success');
+		loadLogFile();
+		log('Super Editor initialized.', 'success');
 		loadSettings();
 		
 		// Attach to selection change event to dynamically update the JSON structure view instantly!
