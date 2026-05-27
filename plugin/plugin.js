@@ -18,6 +18,16 @@
 	const saveKeyBtn = document.getElementById('save-key-btn');
 	const removeKeyBtn = document.getElementById('remove-key-btn');
 
+	// Provider & GitHub configuration elements
+	const providerGroqBtn = document.getElementById('provider-groq-btn');
+	const providerGithubBtn = document.getElementById('provider-github-btn');
+	const panelGroq = document.getElementById('panel-groq');
+	const panelGithub = document.getElementById('panel-github');
+	const githubTokenInput = document.getElementById('github-token');
+	const toggleGithubVisibility = document.getElementById('toggle-github-visibility');
+	const saveGithubBtn = document.getElementById('save-github-btn');
+	const removeGithubBtn = document.getElementById('remove-github-btn');
+
 	const modelSelect = document.getElementById('model-select');
 	const promptInput = document.getElementById('prompt-input');
 	const executeBtn = document.getElementById('execute-btn');
@@ -98,26 +108,92 @@
 		}
 	});
 
+	// GitHub Token Visibility Toggle
+	toggleGithubVisibility.addEventListener('click', () => {
+		if (githubTokenInput.type === 'password') {
+			githubTokenInput.type = 'text';
+			toggleGithubVisibility.innerText = '🙈';
+		} else {
+			githubTokenInput.type = 'password';
+			toggleGithubVisibility.innerText = '👁️';
+		}
+	});
+
+	// Available models for both providers
+	const providerModels = {
+		groq: [
+			{ value: 'llama-3.3-70b-versatile', text: 'Llama 3.3 70B (Recommended)' },
+			{ value: 'llama-3.1-8b-instant', text: 'Llama 3.1 8B (Fast)' },
+			{ value: 'llama3-70b-8192', text: 'Llama 3 70B (Alternative)' }
+		],
+		github: [
+			{ value: 'gpt-4o', text: 'GPT-4o (Flagship)' },
+			{ value: 'gpt-4o-mini', text: 'GPT-4o Mini (Fast & Smart)' },
+			{ value: 'meta-llama-3.1-70b-instruct', text: 'Llama 3.1 70B (Open Weight)' },
+			{ value: 'meta-llama-3.1-405b-instruct', text: 'Llama 3.1 405B (Max Power)' },
+			{ value: 'mistral-large-2407', text: 'Mistral Large (European Flagship)' },
+			{ value: 'phi-3-medium-128k-instruct', text: 'Phi-3 Medium (Lightweight)' }
+		]
+	};
+
+	// Switch active provider
+	function switchProvider(provider) {
+		localStorage.setItem('super_editor_provider', provider);
+		
+		if (provider === 'github') {
+			providerGithubBtn.classList.add('active');
+			providerGroqBtn.classList.remove('active');
+			panelGithub.style.display = 'block';
+			panelGroq.style.display = 'none';
+			
+			// Populate GitHub models
+			modelSelect.innerHTML = providerModels.github.map(m => `<option value="${m.value}">${m.text}</option>`).join('');
+			
+			const savedGithubModel = localStorage.getItem('github_models_model') || 'gpt-4o-mini';
+			modelSelect.value = savedGithubModel;
+			localStorage.setItem('github_models_model', savedGithubModel);
+		} else {
+			providerGroqBtn.classList.add('active');
+			providerGithubBtn.classList.remove('active');
+			panelGroq.style.display = 'block';
+			panelGithub.style.display = 'none';
+			
+			// Populate Groq models
+			modelSelect.innerHTML = providerModels.groq.map(m => `<option value="${m.value}">${m.text}</option>`).join('');
+			
+			const savedGroqModel = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
+			modelSelect.value = savedGroqModel;
+			localStorage.setItem('groq_copilot_model', savedGroqModel);
+		}
+	}
+
+	// Service provider switch listeners
+	providerGroqBtn.addEventListener('click', () => {
+		switchProvider('groq');
+		log('Switched provider to Groq API.', 'info');
+	});
+
+	providerGithubBtn.addEventListener('click', () => {
+		switchProvider('github');
+		log('Switched provider to GitHub Models.', 'info');
+	});
+
 	// Load Saved Settings from localStorage
 	function loadSettings() {
 		const savedKey = localStorage.getItem('groq_copilot_key');
-		const savedModel = localStorage.getItem('groq_copilot_model');
+		const savedGithubToken = localStorage.getItem('github_models_token');
+		const activeProvider = localStorage.getItem('super_editor_provider') || 'groq';
 
 		if (savedKey) {
 			apiKeyInput.value = savedKey;
-			log('Saved Groq API Key loaded securely.', 'success');
-		} else {
-			log('No API Key found. Go to Settings tab to add one.', 'warning');
+		}
+		if (savedGithubToken) {
+			githubTokenInput.value = savedGithubToken;
 		}
 
-		if (savedModel) {
-			if (savedModel === 'mixtral-8x7b-32768') {
-				modelSelect.value = 'llama-3.3-70b-versatile';
-				localStorage.setItem('groq_copilot_model', 'llama-3.3-70b-versatile');
-			} else {
-				modelSelect.value = savedModel;
-			}
-		}
+		// Initialize active provider panel & select options
+		switchProvider(activeProvider);
+		log(`Super Editor provider settings loaded securely. Active: ${activeProvider.toUpperCase()}`, 'success');
 	}
 
 	// Save API Key Actions
@@ -139,10 +215,35 @@
 		log('Groq API Key removed from local storage.', 'warning');
 	});
 
+	// Save GitHub Token Actions
+	saveGithubBtn.addEventListener('click', () => {
+		const token = githubTokenInput.value.trim();
+		if (!token) {
+			log('Error: Token cannot be empty.', 'error');
+			return;
+		}
+		localStorage.setItem('github_models_token', token);
+		log('GitHub Token saved successfully!', 'success');
+		tabPrompt.click(); // Switch back to editor tab
+	});
+
+	// Remove GitHub Token Actions
+	removeGithubBtn.addEventListener('click', () => {
+		localStorage.removeItem('github_models_token');
+		githubTokenInput.value = '';
+		log('GitHub Token removed from local storage.', 'warning');
+	});
+
 	// Save Model Choice on select
 	modelSelect.addEventListener('change', () => {
-		localStorage.setItem('groq_copilot_model', modelSelect.value);
-		log(`Model switched to ${modelSelect.value}`, 'info');
+		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
+		if (currentProvider === 'github') {
+			localStorage.setItem('github_models_model', modelSelect.value);
+			log(`Model switched to GitHub: ${modelSelect.value}`, 'info');
+		} else {
+			localStorage.setItem('groq_copilot_model', modelSelect.value);
+			log(`Model switched to Groq: ${modelSelect.value}`, 'info');
+		}
 	});
 
 	// Suggestion Chips handler
@@ -396,9 +497,11 @@
 
 	// Bind chip-summarize click event (fully dynamic)
 	chipSummarize.addEventListener('click', async () => {
-		const apiKey = apiKeyInput.value.trim();
-		if (!apiKey) {
-			log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
+		const provider = localStorage.getItem('super_editor_provider') || 'groq';
+		const hasToken = provider === 'github' ? localStorage.getItem('github_models_token') : localStorage.getItem('groq_copilot_key');
+		
+		if (!hasToken) {
+			log(`Error: ${provider === 'github' ? 'GitHub Token' : 'Groq API Key'} is not configured. Add it in Settings.`, 'error');
 			tabSettings.click();
 			return;
 		}
@@ -409,39 +512,23 @@
 			const parsed = JSON.parse(docJSON);
 			log(`Summarizing active range [${parsed.mode === 'selection' ? 'Selection Only' : 'Entire Document'}]...`, 'info');
 
-			
-			const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${apiKey}`,
-					'Content-Type': 'application/json'
+			const messages = [
+				{
+					role: 'system',
+					content: "You are an expert executive summary agent. Analyze the provided text and document structure and return an extremely high-quality summary in 3 to 5 concise bullet points. Format the output directly as clean plain text bullet points starting with standard dash '-' prefixes. Do not return any JSON or markdown blocks."
 				},
-				body: JSON.stringify({
-					model: modelSelect.value,
-					messages: [
-						{
-							role: 'system',
-							content: "You are an expert executive summary agent. Analyze the provided text and document structure and return an extremely high-quality summary in 3 to 5 concise bullet points. Format the output directly as clean plain text bullet points starting with standard dash '-' prefixes. Do not return any JSON or markdown blocks."
-						},
-						{
-							role: 'user',
-							content: `Document data: ${JSON.stringify(parsed)}`
-						}
-					],
-					temperature: 0.2
-				})
-			});
+				{
+					role: 'user',
+					content: `Document data: ${JSON.stringify(parsed)}`
+				}
+			];
 
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}`);
-			}
-
-			const data = await response.json();
-			activeSummaryContent = data.choices[0].message.content.trim();
+			const responseContent = await queryActiveLLM(messages, 0.2, false);
+			activeSummaryContent = responseContent.trim();
 			
 			summaryText.innerText = activeSummaryContent;
 			summaryCard.style.display = 'block';
-			log("Executive summary compiled successfully by Groq AI!", "success");
+			log(`Executive summary compiled successfully by ${provider === 'github' ? 'GitHub Models' : 'Groq AI'}!`, "success");
 		} catch (err) {
 			log(`Summarization failed: ${err.message}`, 'error');
 		} finally {
@@ -469,11 +556,12 @@
 
 	// Click run button
 	executeBtn.addEventListener('click', async () => {
-		const apiKey = apiKeyInput.value.trim();
+		const provider = localStorage.getItem('super_editor_provider') || 'groq';
+		const hasToken = provider === 'github' ? localStorage.getItem('github_models_token') : localStorage.getItem('groq_copilot_key');
 		const prompt = promptInput.value.trim();
 
-		if (!apiKey) {
-			log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
+		if (!hasToken) {
+			log(`Error: ${provider === 'github' ? 'GitHub Token' : 'Groq API Key'} is not configured. Add it in Settings.`, 'error');
 			tabSettings.click();
 			return;
 		}
@@ -501,12 +589,14 @@
 				return;
 			}
 
+			const activeModel = provider === 'github' ? localStorage.getItem('github_models_model') : localStorage.getItem('groq_copilot_model');
+
 			log(`Successfully scanned ${cachedDocData.sections.length} sections containing ${totalElements} elements [Mode: ${cachedDocData.mode}].`, 'success');
-			log(`Contacting Groq endpoint [api.groq.com/openai/v1] using model: ${modelSelect.value}...`, 'info');
+			log(`Contacting ${provider === 'github' ? 'GitHub Models' : 'Groq API'} using model: ${activeModel}...`, 'info');
 			
-			const aiResponse = await queryGroqAPI(apiKey, modelSelect.value, cachedDocData, prompt, cachedDocData.mode === "selection");
+			const aiResponse = await queryLLM(cachedDocData, prompt, cachedDocData.mode === "selection");
 			
-			log('Received secure API response from Groq.', 'success');
+			log(`Received secure API response from ${provider === 'github' ? 'GitHub Models' : 'Groq'}.`, 'success');
 			
 			proposedChanges = parseAIResponse(aiResponse);
 			
@@ -1384,8 +1474,84 @@
 		});
 	}
 
-	// Query Groq API with robust schema and selection context mapping
-	async function queryGroqAPI(apiKey, model, docData, prompt, isSelection = false) {
+	// Unified LLM Requester supporting Groq API and GitHub Models
+	async function queryActiveLLM(messages, temperature = 0.1, isJsonMode = false) {
+		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
+		
+		if (currentProvider === 'github') {
+			const token = localStorage.getItem('github_models_token');
+			const model = localStorage.getItem('github_models_model') || 'gpt-4o-mini';
+			
+			if (!token) {
+				throw new Error("GitHub Token (PAT) is not configured. Add it in Settings.");
+			}
+			
+			const requestBody = {
+				model: model,
+				messages: messages,
+				temperature: temperature
+			};
+			
+			if (isJsonMode) {
+				requestBody.response_format = { type: 'json_object' };
+			}
+			
+			const response = await fetch('https://models.github.ai/inference/chat/completions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json',
+					'Accept': 'application/vnd.github+json'
+				},
+				body: JSON.stringify(requestBody)
+			});
+			
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || errorData.error?.message || `HTTP ${response.status}`);
+			}
+			
+			const data = await response.json();
+			return data.choices[0].message.content;
+		} else {
+			const apiKey = localStorage.getItem('groq_copilot_key');
+			const model = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
+			
+			if (!apiKey) {
+				throw new Error("Groq API Key is not configured. Add it in Settings.");
+			}
+			
+			const requestBody = {
+				model: model,
+				messages: messages,
+				temperature: temperature
+			};
+			
+			if (isJsonMode) {
+				requestBody.response_format = { type: 'json_object' };
+			}
+			
+			const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(requestBody)
+			});
+			
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+			}
+			
+			const data = await response.json();
+			return data.choices[0].message.content;
+		}
+	}
+
+	// Query LLM with robust schema and selection context mapping
+	async function queryLLM(docData, prompt, isSelection = false) {
 		const systemMessage = `You are a professional document typesetter and layout agent. Your task is to analyze the provided JSON representation of a ${isSelection ? 'selected range of a document' : 'document'} and generate the requested style or content changes as a valid JSON object.
 		
 Each paragraph and table has a unique, absolute "index" identifying its location in the document.
@@ -1450,7 +1616,7 @@ Formatting & units specifications for "modifyStyle":
 - "newText" (string, optional - only provide for minor text edits or simple updates)
 
 INLINE GRANULAR FORMATTING IN "newText" (Only when using "modifyStyle"):
-If using "modifyStyle" and the user's prompt requests specific formatting of certain words, phrases, headings, or elements inside that paragraph, you can use standard inline HTML tags (<b>, <i>, <u>, <sup>, <sub>, <small>, <big>, <del>, <mark>, <span style="...">) inside "newText".
+If using "modifyStyle" and the user's prompt requests specific formatting of certain words, phrases, headings, or elements inside that paragraph, you can use standard inline HTML tags inside "newText".
 However, remember that "pasteHTML" is the absolute standard and is 100% preferred over "modifyStyle" for all long-form content generation and writing tasks!
 
 ${isSelection ? 'IMPORTANT: You are targeting the ACTIVE SELECTION range. Apply modifications only targeting elements present inside the active selection.' : 'If the user wants a global change (e.g. "change the entire font color to yellow"), you MUST generate "modifyStyle" commands for EVERY single paragraph index in the document.'}
@@ -1462,30 +1628,12 @@ ${JSON.stringify(docData, null, 2)}
 User Request:
 "${prompt}"`;
 
-		const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${apiKey}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				model: model,
-				messages: [
-					{ role: 'system', content: systemMessage },
-					{ role: 'user', content: userMessage }
-				],
-				temperature: 0.1,
-				response_format: { type: 'json_object' }
-			})
-		});
+		const messages = [
+			{ role: 'system', content: systemMessage },
+			{ role: 'user', content: userMessage }
+		];
 
-		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({}));
-			throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-		}
-
-		const data = await response.json();
-		return data.choices[0].message.content;
+		return await queryActiveLLM(messages, 0.1, true);
 	}
 
 	// Parse JSON array of changes
