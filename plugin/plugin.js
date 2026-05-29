@@ -341,6 +341,50 @@
     }
   }
 
+  function applyFontProperties(target, fontName, fontSize) {
+    if (!target) return;
+
+    try {
+      if (fontName !== undefined) {
+        if (typeof target.SetFontName === "function") {
+          target.SetFontName(fontName);
+        } else if (typeof target.SetFontFamily === "function") {
+          target.SetFontFamily(fontName);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (fontSize !== undefined && typeof target.SetFontSize === "function") {
+        target.SetFontSize(fontSize);
+      }
+    } catch (e) {}
+
+    try {
+      if (typeof target.GetTextPr === "function") {
+        var textPr = target.GetTextPr();
+        if (textPr) {
+          if (fontName !== undefined) {
+            try {
+              if (typeof textPr.SetFontName === "function") {
+                textPr.SetFontName(fontName);
+              } else if (typeof textPr.SetFontFamily === "function") {
+                textPr.SetFontFamily(fontName);
+              }
+            } catch (e) {}
+          }
+          if (fontSize !== undefined) {
+            try {
+              if (typeof textPr.SetFontSize === "function") {
+                textPr.SetFontSize(fontSize);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   // Dynamic Document JSON Viewer compiler (debounced and fully dynamic)
   let isScanning = false;
   let isEditingAutonomously = false;
@@ -2495,16 +2539,11 @@ User Request:
                     oRun = oPar.AddText(decText);
                   } catch (eText) {}
                   if (oRun) {
-                    if (formatState.fontName) {
-                      try {
-                        oRun.SetFontName(formatState.fontName);
-                      } catch (e) {}
-                    }
-                    if (formatState.fontSize) {
-                      try {
-                        oRun.SetFontSize(formatState.fontSize);
-                      } catch (e) {}
-                    }
+                    applyFontProperties(
+                      oRun,
+                      formatState.fontName,
+                      formatState.fontSize,
+                    );
                     try {
                       oRun.SetBold(!!formatState.bold);
                     } catch (e) {}
@@ -2794,16 +2833,11 @@ User Request:
                   for (var r = 0; r < runCount; r++) {
                     var oRun = oParagraph.GetElement(r);
                     if (oRun && oRun.GetClassType() === "run") {
-                      if (oProps.fontName !== undefined) {
-                        try {
-                          oRun.SetFontName(oProps.fontName);
-                        } catch (e) {}
-                      }
-                      if (oProps.fontSize !== undefined) {
-                        try {
-                          oRun.SetFontSize(oProps.fontSize);
-                        } catch (e) {}
-                      }
+                      applyFontProperties(
+                        oRun,
+                        oProps.fontName,
+                        oProps.fontSize,
+                      );
                       if (oProps.bold !== undefined) {
                         try {
                           oRun.SetBold(!!oProps.bold);
@@ -3287,16 +3321,11 @@ User Request:
                     oRun = oPar.AddText(decText);
                   } catch (eText) {}
                   if (oRun) {
-                    if (formatState.fontName) {
-                      try {
-                        oRun.SetFontName(formatState.fontName);
-                      } catch (e) {}
-                    }
-                    if (formatState.fontSize) {
-                      try {
-                        oRun.SetFontSize(formatState.fontSize);
-                      } catch (e) {}
-                    }
+                    applyFontProperties(
+                      oRun,
+                      formatState.fontName,
+                      formatState.fontSize,
+                    );
                     try {
                       oRun.SetBold(!!formatState.bold);
                     } catch (e) {}
