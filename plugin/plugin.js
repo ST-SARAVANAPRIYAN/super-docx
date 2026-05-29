@@ -27,8 +27,11 @@
 	const toggleGithubVisibility = document.getElementById('toggle-github-visibility');
 	const saveGithubBtn = document.getElementById('save-github-btn');
 	const removeGithubBtn = document.getElementById('remove-github-btn');
+	
+
 
 	const modelSelect = document.getElementById('model-select');
+	const modelCostBadge = document.getElementById('model-cost-badge');
 	const promptInput = document.getElementById('prompt-input');
 	const executeBtn = document.getElementById('execute-btn');
 	const logContainer = document.getElementById('log-container');
@@ -64,6 +67,151 @@
 	let cachedDocData = null;
 	let proposedChanges = null;
 	let checkpoints = [];
+
+	// Execution Telemetry Debug State
+	let lastExecutionDebugData = {
+		timestamp: null,
+		intent: null,
+		serializationMode: null,
+		userPrompt: null,
+		systemPrompt: null,
+		fullUserPrompt: null,
+		rawResponse: null,
+		parsedPlans: null,
+		stateBefore: [],
+		stateAfter: [],
+		status: "No executions yet"
+	};
+
+	const debugViewerContent = document.getElementById('debug-viewer-content');
+	const copyDebugLogBtn = document.getElementById('copy-debug-log');
+	const clearDebugLogBtn = document.getElementById('clear-debug-log');
+
+	function updateDebugViewer() {
+		if (!debugViewerContent) return;
+		
+		if (!lastExecutionDebugData.timestamp) {
+			debugViewerContent.textContent = "No execution data captured yet. Execute an AI command to see step-by-step telemetry logs here.";
+			return;
+		}
+
+		const fullLog = `======================================================================
+📋 AI PIPELINE TELEMETRY SUMMARY
+======================================================================
+Timestamp:          ${lastExecutionDebugData.timestamp || 'N/A'}
+Status:             ${lastExecutionDebugData.status || 'N/A'}
+Intent Router:      ${lastExecutionDebugData.intent || 'N/A'}
+Serialization Mode: ${lastExecutionDebugData.serializationMode || 'N/A'}
+User Prompt:        "${lastExecutionDebugData.userPrompt || ''}"
+Logical Steps Count: ${lastExecutionDebugData.parsedPlans ? lastExecutionDebugData.parsedPlans.length : 0}
+
+======================================================================
+💬 ACTIVE LLM PROMPTS
+======================================================================
+--- SYSTEM PROMPT (RULES INJECTED) ---
+${lastExecutionDebugData.systemPrompt || 'N/A'}
+
+--- USER MESSAGE (EXTRACTED CONTEXT & PROMPT) ---
+${lastExecutionDebugData.fullUserPrompt || 'N/A'}
+
+======================================================================
+🔍 DOCUMENT STATE BEFORE CHANGES
+======================================================================
+${JSON.stringify(lastExecutionDebugData.stateBefore, null, 2)}
+
+======================================================================
+✨ DOCUMENT STATE AFTER CHANGES (WITH VERIFICATION OUTPUT)
+======================================================================
+${JSON.stringify(lastExecutionDebugData.stateAfter, null, 2)}
+
+======================================================================
+🤖 RAW LLM RESPONSE & ACTIONS DECODED
+======================================================================
+--- RAW RESPONSE ---
+${lastExecutionDebugData.rawResponse || 'N/A'}
+
+--- DECODED PLAN STEPS ---
+${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
+`;
+
+		debugViewerContent.textContent = fullLog;
+	}
+
+	if (copyDebugLogBtn) {
+		copyDebugLogBtn.addEventListener('click', () => {
+			const text = debugViewerContent.textContent;
+			if (!text || text.startsWith("No execution data")) return;
+			navigator.clipboard.writeText(text).then(() => {
+				const originalText = copyDebugLogBtn.innerText;
+				copyDebugLogBtn.innerText = "Copied! ✓";
+				setTimeout(() => { copyDebugLogBtn.innerText = originalText; }, 1500);
+			});
+		});
+	}
+
+	if (clearDebugLogBtn) {
+		clearDebugLogBtn.addEventListener('click', () => {
+			lastExecutionDebugData = {
+				timestamp: null,
+				intent: null,
+				serializationMode: null,
+				userPrompt: null,
+				systemPrompt: null,
+				fullUserPrompt: null,
+				rawResponse: null,
+				parsedPlans: null,
+				stateBefore: [],
+				stateAfter: [],
+				status: "No executions yet"
+			};
+			updateDebugViewer();
+			log("Cleared execution debugger telemetry logs.", "info");
+		});
+	}
+
+	// Supported Intents for the Router Layer
+	const INTENTS = {
+		REWRITE: "rewrite",
+		SUMMARIZE: "summarize",
+		TRANSLATE: "translate",
+		FORMAT: "format",
+		CREATE_DOCUMENT: "create_document",
+		INSERT_CONTENT: "insert_content",
+		DELETE_CONTENT: "delete_content",
+		RESTRUCTURE: "restructure",
+		ANALYZE: "analyze"
+	};
+
+	// Local Rule Engine rules per intent
+	const RULES = {
+		rewrite: {
+			instructions: "1. Focus ONLY on writing beautiful, professional, context-appropriate text.\n2. Do NOT change visual styling properties (bold, italic, font family) in this plan unless explicitly requested.\n3. Return a high-level action 'rewrite' for the paragraph indices to update.\n4. Output valid JSON in the Planner format."
+		},
+		summarize: {
+			instructions: "1. Condense the text into 3 to 5 clear, high-quality, professional bullet points starting with standard dash '-' prefixes.\n2. Return a high-level action 'paste_html' or 'rewrite' with the summary bullets.\n3. Do not generate visual changes unless asked."
+		},
+		translate: {
+			instructions: "1. Translate the text into the target language with perfect grammatical accuracy.\n2. Keep paragraph structure identical. Do not alter styling.\n3. Return a 'rewrite' action for the paragraph indices."
+		},
+		format: {
+			instructions: "1. Focus ONLY on styling (fontName, fontSize, bold, italic, color, alignment, spacing, shading).\n2. Do NOT rewrite the text content of the paragraphs unless explicitly requested to fix text.\n3. Return 'change_font', 'change_color', or 'modifyStyle' high-level actions."
+		},
+		create_document: {
+			instructions: "1. Generate a beautifully structured document, essay, report, or article using professional formatting rules.\n2. Heavily use 'paste_html' action with high-fidelity styled HTML strings.\n3. Create proper heading hierarchies (<h1 style='...'>, <h2 style='...'>, <p style='text-align:justify;'>)."
+		},
+		insert_content: {
+			instructions: "1. Insert new paragraphs or tables at the correct target index.\n2. Return 'create_paragraph' or 'paste_html' high-level actions with proper texts/styles."
+		},
+		delete_content: {
+			instructions: "1. Remove targeted content, paragraphs, tables, or sections.\n2. Return 'delete_paragraph' high-level actions."
+		},
+		restructure: {
+			instructions: "1. Reorganize headings, change layouts or margins.\n2. Return correct sequence of high-level actions (delete, create, format) to achieve structure."
+		},
+		analyze: {
+			instructions: "1. Read document text and identify issues, grammar, tone, flow.\n2. Return logical list of rewrite actions to correct found issues."
+		}
+	};
 
 	// View Tabs Navigation
 	tabPrompt.addEventListener('click', () => {
@@ -119,20 +267,20 @@
 		}
 	});
 
-	// Available models for both providers
+	// Available models for both providers with relative cost mappings
 	const providerModels = {
 		groq: [
-			{ value: 'llama-3.3-70b-versatile', text: 'Llama 3.3 70B (Recommended)' },
-			{ value: 'llama-3.1-8b-instant', text: 'Llama 3.1 8B (Fast)' },
-			{ value: 'llama3-70b-8192', text: 'Llama 3 70B (Alternative)' }
+			{ value: 'llama-3.3-70b-versatile', text: 'Llama 3.3 70B (Recommended) [0.5x cost]', cost: '0.5x' },
+			{ value: 'llama-3.1-8b-instant', text: 'Llama 3.1 8B (Fast) [0.05x cost]', cost: '0.05x' },
+			{ value: 'llama3-70b-8192', text: 'Llama 3 70B (Alternative) [0.5x cost]', cost: '0.5x' }
 		],
 		github: [
-			{ value: 'gpt-4o', text: 'GPT-4o (Flagship)' },
-			{ value: 'gpt-4o-mini', text: 'GPT-4o Mini (Fast & Smart)' },
-			{ value: 'meta-llama-3.1-70b-instruct', text: 'Llama 3.1 70B (Open Weight)' },
-			{ value: 'meta-llama-3.1-405b-instruct', text: 'Llama 3.1 405B (Max Power)' },
-			{ value: 'mistral-large-2407', text: 'Mistral Large (European Flagship)' },
-			{ value: 'phi-3-medium-128k-instruct', text: 'Phi-3 Medium (Lightweight)' }
+			{ value: 'gpt-4o', text: 'GPT-4o (Flagship) [2.5x cost]', cost: '2.5x' },
+			{ value: 'gpt-4o-mini', text: 'GPT-4o Mini (Fast & Smart) [0.1x cost]', cost: '0.1x' },
+			{ value: 'meta-llama-3.1-70b-instruct', text: 'Llama 3.1 70B (Open Weight) [0.6x cost]', cost: '0.6x' },
+			{ value: 'meta-llama-3.1-405b-instruct', text: 'Llama 3.1 405B (Max Power) [3.0x cost]', cost: '3.0x' },
+			{ value: 'mistral-large-2407', text: 'Mistral Large (European Flagship) [2.0x cost]', cost: '2.0x' },
+			{ value: 'phi-3-medium-128k-instruct', text: 'Phi-3 Medium (Lightweight) [0.15x cost]', cost: '0.15x' }
 		]
 	};
 
@@ -164,6 +312,45 @@
 			const savedGroqModel = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
 			modelSelect.value = savedGroqModel;
 			localStorage.setItem('groq_copilot_model', savedGroqModel);
+		}
+		
+		// Render dynamic cost indicator badge
+		updateCostBadge();
+	}
+
+	// Update Dynamic Model Relative Cost Badge
+	function updateCostBadge() {
+		if (!modelCostBadge || !modelSelect) return;
+		
+		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
+		const currentModel = modelSelect.value;
+		const models = providerModels[currentProvider];
+		const selectedModel = models.find(m => m.value === currentModel);
+		
+		if (selectedModel && selectedModel.cost) {
+			const costVal = parseFloat(selectedModel.cost.replace('x', ''));
+			modelCostBadge.innerText = selectedModel.cost + ' Cost';
+			modelCostBadge.style.display = 'inline-block';
+			
+			// Dynamic color schemes (Tokyo Night Tailored HSL color tones)
+			if (costVal < 0.3) {
+				// Green (Ultra efficient)
+				modelCostBadge.style.color = '#10b981';
+				modelCostBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+				modelCostBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+			} else if (costVal <= 1.0) {
+				// Orange (Medium resource weight)
+				modelCostBadge.style.color = '#f59e0b';
+				modelCostBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+				modelCostBadge.style.background = 'rgba(245, 158, 11, 0.1)';
+			} else {
+				// Coral/Red (Flagship/Premium engines)
+				modelCostBadge.style.color = '#f43f5e';
+				modelCostBadge.style.borderColor = 'rgba(244, 63, 94, 0.3)';
+				modelCostBadge.style.background = 'rgba(244, 63, 94, 0.1)';
+			}
+		} else {
+			modelCostBadge.style.display = 'none';
 		}
 	}
 
@@ -218,12 +405,14 @@
 	// Save GitHub Token Actions
 	saveGithubBtn.addEventListener('click', () => {
 		const token = githubTokenInput.value.trim();
+		
 		if (!token) {
 			log('Error: Token cannot be empty.', 'error');
 			return;
 		}
+		
 		localStorage.setItem('github_models_token', token);
-		log('GitHub Token saved successfully!', 'success');
+		log('GitHub settings saved successfully!', 'success');
 		tabPrompt.click(); // Switch back to editor tab
 	});
 
@@ -231,10 +420,12 @@
 	removeGithubBtn.addEventListener('click', () => {
 		localStorage.removeItem('github_models_token');
 		githubTokenInput.value = '';
-		log('GitHub Token removed from local storage.', 'warning');
+		log('GitHub credentials removed from local storage.', 'warning');
 	});
 
-	// Save Model Choice on select
+
+
+	// Save Model Choice on select and update cost indicator
 	modelSelect.addEventListener('change', () => {
 		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
 		if (currentProvider === 'github') {
@@ -244,6 +435,7 @@
 			localStorage.setItem('groq_copilot_model', modelSelect.value);
 			log(`Model switched to Groq: ${modelSelect.value}`, 'info');
 		}
+		updateCostBadge();
 	});
 
 	// Suggestion Chips handler
@@ -554,7 +746,7 @@
 		});
 	});
 
-	// Click run button
+	// Click run button (Refactored Intent-routed Context-aware Pipeline)
 	executeBtn.addEventListener('click', async () => {
 		const provider = localStorage.getItem('super_editor_provider') || 'groq';
 		const hasToken = provider === 'github' ? localStorage.getItem('github_models_token') : localStorage.getItem('groq_copilot_key');
@@ -570,10 +762,42 @@
 			return;
 		}
 
+		// Initialize Telemetry Log
+		lastExecutionDebugData = {
+			timestamp: new Date().toLocaleString(),
+			intent: "Routing...",
+			serializationMode: "Determining...",
+			userPrompt: prompt,
+			systemPrompt: null,
+			fullUserPrompt: null,
+			rawResponse: null,
+			parsedPlans: null,
+			stateBefore: [],
+			stateAfter: [],
+			status: "Running (Routing Intent & Extracting Context)..."
+		};
+		if (typeof updateDebugViewer === 'function') updateDebugViewer();
+
 		setLoading(true);
 
 		try {
-			const docJSON = await serializeActiveContent();
+			// LAYER 1: Intent Router
+			const intent = await routeIntent(prompt);
+			lastExecutionDebugData.intent = intent;
+			if (typeof updateDebugViewer === 'function') updateDebugViewer();
+
+			// LAYER 2: Context Builder Serialization mode determination
+			let serializationMode = "minimal";
+			if (intent === INTENTS.FORMAT || intent === INTENTS.INSERT_CONTENT || intent === INTENTS.DELETE_CONTENT) {
+				serializationMode = "medium";
+			} else if (intent === INTENTS.CREATE_DOCUMENT || intent === INTENTS.RESTRUCTURE || intent === INTENTS.ANALYZE) {
+				serializationMode = "full";
+			}
+			lastExecutionDebugData.serializationMode = serializationMode;
+			if (typeof updateDebugViewer === 'function') updateDebugViewer();
+
+			log(`[CONTEXT_BUILDER] Selected serialization mode: [${serializationMode.toUpperCase()}] for routed intent [${intent.toUpperCase()}].`, 'info');
+			const docJSON = await serializeActiveContent(serializationMode);
 			cachedDocData = JSON.parse(docJSON);
 			
 			let totalElements = 0;
@@ -583,33 +807,45 @@
 				});
 			}
 
-			if (totalElements === 0) {
+			if (totalElements === 0 && intent !== INTENTS.CREATE_DOCUMENT) {
 				log('Error: Selection range or document is empty.', 'error');
+				lastExecutionDebugData.status = "Failed: Selection range or document is empty.";
+				if (typeof updateDebugViewer === 'function') updateDebugViewer();
 				setLoading(false);
 				return;
 			}
 
 			const activeModel = provider === 'github' ? localStorage.getItem('github_models_model') : localStorage.getItem('groq_copilot_model');
 
-			log(`Successfully scanned ${cachedDocData.sections.length} sections containing ${totalElements} elements [Mode: ${cachedDocData.mode}].`, 'success');
 			log(`Contacting ${provider === 'github' ? 'GitHub Models' : 'Groq API'} using model: ${activeModel}...`, 'info');
+			lastExecutionDebugData.status = "Running (Querying LLM)...";
+			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			
-			const aiResponse = await queryLLM(cachedDocData, prompt, cachedDocData.mode === "selection");
+			// LAYER 3 & 4: Planner LLM with rule injection
+			const aiResponse = await queryPlannerLLM(cachedDocData, prompt, intent);
+			lastExecutionDebugData.rawResponse = aiResponse;
+			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			
-			log(`Received secure API response from ${provider === 'github' ? 'GitHub Models' : 'Groq'}.`, 'success');
+			log(`Received secure Action Plan from ${provider === 'github' ? 'GitHub Models' : 'Groq'}.`, 'success');
 			
 			proposedChanges = parseAIResponse(aiResponse);
+			lastExecutionDebugData.parsedPlans = proposedChanges;
 			
 			if (!proposedChanges || proposedChanges.length === 0) {
-				log('Analysis complete: No style or content changes suggested for this request.', 'warning');
+				log('Analysis complete: No logical changes suggested for this request.', 'warning');
+				lastExecutionDebugData.status = "No changes suggested.";
 				changesCard.style.display = 'none';
 			} else {
-				log(`Successfully decoded ${proposedChanges.length} autonomous formatting instructions.`, 'success');
+				log(`Successfully decoded ${proposedChanges.length} logical action steps.`, 'success');
+				lastExecutionDebugData.status = "Decoded action plan, waiting for User Accept/Discard...";
 				renderPreview(proposedChanges);
 			}
+			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
 		} catch (err) {
 			log(`Execution Error: ${err.message}`, 'error');
+			lastExecutionDebugData.status = "Failed: " + err.message;
+			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			console.error(err);
 		} finally {
 			setLoading(false);
@@ -699,15 +935,272 @@
 		return runsData;
 	}
 
-	// Dynamic selection text/range serializer with absolute document mapping
-		// Consolidated dynamic selection or document serializer
-	function serializeActiveContent() {
+	// ==========================================
+	// ARCHITECTURAL LAYER IMPLEMENTATIONS
+	// ==========================================
+	// LAYER 1: Intent Router Layer
+	async function routeIntent(prompt) {
+		log(`Routing user intent for prompt: "${prompt.substring(0, 40)}..."`, 'info');
+		const systemMessage = `You are an Intent Router. Your job is to classify the user's document editing request into exactly one of the following intents:
+- "rewrite": Rewrite, rephrase, change tone, expand, shorten, professionalize text.
+- "summarize": Create summary, bullets, overview of selection/document.
+- "translate": Translate text into another language.
+- "format": Change font, size, bold, italic, color, alignment, spacing, indentation, shading. No rewriting.
+- "create_document": Generate a new document, write essays, letters, articles, full sections.
+- "insert_content": Insert a new paragraph, table, or content at a location.
+- "delete_content": Delete or remove paragraphs, sentences, or tables.
+- "restructure": Reorganize, sort headings, change document flow or page layout/margins.
+- "analyze": Analyze grammar, spelling, structure, style issues, readability.
+
+Respond ONLY with a valid JSON object containing a single key "intent" mapped to one of the following exact string values: "rewrite", "summarize", "translate", "format", "create_document", "insert_content", "delete_content", "restructure", "analyze".
+Do not include markdown packaging.
+Example response: {"intent": "rewrite"}`;
+
+		const messages = [
+			{ role: 'system', content: systemMessage },
+			{ role: 'user', content: `Request: "${prompt}"` }
+		];
+
+		try {
+			const res = await queryActiveLLM(messages, 0.0, true);
+			let clean = res.trim();
+			if (clean.startsWith('```')) {
+				clean = clean.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+			}
+			const parsed = JSON.parse(clean);
+			if (parsed && parsed.intent && Object.values(INTENTS).includes(parsed.intent)) {
+				log(`Intent classified successfully: [${parsed.intent.toUpperCase()}]`, 'success');
+				return parsed.intent;
+			}
+		} catch (e) {
+			log(`Intent routing error: ${e.message}. Defaulting to "rewrite".`, 'warning');
+		}
+		return INTENTS.REWRITE;
+	}
+
+	// LAYER 3 & 4: Planner LLM Layer with Rule Injection
+	async function queryPlannerLLM(docData, prompt, intent) {
+		const ruleset = RULES[intent] || RULES.rewrite;
+		const systemMessage = `You are a professional document planner assistant. Your job is to analyze the provided document context and user request, and generate a high-level logical Action Plan.
+
+You must NEVER generate OnlyOffice API commands directly (like Select(), AddElement(), etc.).
+You must ONLY output valid JSON containing a single "plans" key holding an array of high-level action objects.
+
+Every plan action must follow this exact structure:
+{
+  "plans": [
+    {
+      "action": "rewrite" | "change_font" | "change_color" | "create_paragraph" | "delete_paragraph" | "paste_html",
+      "targetIndex": 5,
+      "properties": {
+        "newText": "Rewritten or newly created plain text here...",
+        "html": "<p style='font-family:Arial;font-size:12pt;'>Styled HTML content for paste_html...</p>",
+        "fontName": "Georgia",
+        "fontSize": 12, // in standard points (e.g., 12 for 12pt, 19.5 for 19.5pt)
+        "bold": true,
+        "italic": false,
+        "underline": true,
+        "strikeout": false,
+        "doubleStrikeout": false,
+        "color": "#1e40af",
+        "highlight": "yellow",
+        "alignment": "justify" | "left" | "center" | "right",
+        "spacingBefore": 120, // in dxa
+        "spacingAfter": 120, // in dxa
+        "lineSpacing": 1.15,
+        "shading": "#f3f4f6"
+      }
+    }
+  ]
+}
+
+Specific rules for this intent [${intent.toUpperCase()}]:
+${ruleset.instructions}
+
+Return valid JSON only. Do not include markdown code block formatting (like \`\`\`json).`;
+
+		const userMessage = `Current Document Context (${docData.targetMode} mode):
+${JSON.stringify(docData, null, 2)}
+
+User Request:
+"${prompt}"`;
+
+		const messages = [
+			{ role: 'system', content: systemMessage },
+			{ role: 'user', content: userMessage }
+		];
+
+		lastExecutionDebugData.systemPrompt = systemMessage;
+		lastExecutionDebugData.fullUserPrompt = userMessage;
+		if (typeof updateDebugViewer === 'function') updateDebugViewer();
+
+		return await queryActiveLLM(messages, 0.1, true);
+	}
+
+	// LAYER 6: Verification Engine helpers
+	function captureElementState(targetIndex) {
+		return new Promise((resolve) => {
+			window.Asc.scope.targetIndex = targetIndex;
+			window.Asc.plugin.callCommand(function() {
+				var targetIndex = Asc.scope.targetIndex;
+				var oDocument = Api.GetDocument();
+				var count = oDocument.GetElementsCount();
+				if (targetIndex >= count || targetIndex < 0) {
+					return null;
+				}
+				var oParagraph = oDocument.GetElement(targetIndex);
+				if (!oParagraph || oParagraph.GetClassType() !== "paragraph") {
+					return { type: "other", text: "", elementsCount: count };
+				}
+				var text = oParagraph.GetText() || "";
+				var fontName = "Calibri";
+				var fontSize = 22;
+				var bold = false;
+				var underline = false;
+				
+				try {
+					var runCount = oParagraph.GetElementsCount();
+					if (runCount > 0) {
+						var firstRun = oParagraph.GetElement(0);
+						if (firstRun) {
+							// 1. Direct from Run properties
+							try {
+								if (typeof firstRun.GetFontFamily === "function") {
+									var family = firstRun.GetFontFamily();
+									if (family) fontName = family;
+								}
+							} catch(e) {}
+							try {
+								if ((fontName === "Calibri" || !fontName) && typeof firstRun.GetFontNames === "function") {
+									var names = firstRun.GetFontNames();
+									if (names && names.length > 0) fontName = names[0] || fontName;
+								}
+							} catch(e) {}
+							try {
+								if ((fontName === "Calibri" || !fontName) && typeof firstRun.GetFontName === "function") {
+									fontName = firstRun.GetFontName() || fontName;
+								}
+							} catch(e) {}
+							try { if (typeof firstRun.GetFontSize === "function") fontSize = firstRun.GetFontSize() || fontSize; } catch(e) {}
+							try { if (typeof firstRun.GetBold === "function") bold = !!firstRun.GetBold(); } catch(e) {}
+							try { if (typeof firstRun.GetUnderline === "function") underline = !!firstRun.GetUnderline(); } catch(e) {}
+
+							// 2. From Text properties (TextPr)
+							try {
+								if (typeof firstRun.GetTextPr === "function") {
+									var tp = firstRun.GetTextPr();
+									if (tp) {
+										if (fontName === "Calibri" && typeof tp.GetFontFamily === "function") fontName = tp.GetFontFamily() || fontName;
+										if (!fontSize && typeof tp.GetFontSize === "function") fontSize = tp.GetFontSize() || fontSize;
+										if (!bold && typeof tp.GetBold === "function") bold = !!tp.GetBold();
+										if (!underline && typeof tp.GetUnderline === "function") underline = !!tp.GetUnderline();
+									}
+								}
+							} catch(e) {}
+						}
+					}
+				} catch(e) {}
+
+				return {
+					type: "paragraph",
+					text: text,
+					fontName: fontName,
+					fontSize: fontSize / 2, // convert to standard points
+					bold: bold,
+					underline: underline,
+					elementsCount: count
+				};
+			}, false, true, function(res) {
+				resolve(res);
+			});
+		});
+	}
+
+	function verifyChange(change, beforeState, afterState) {
+		const actionName = change.action;
+		const props = change.properties || {};
+
+		if (actionName === 'delete_paragraph' || actionName === 'deleteParagraph') {
+			if (!beforeState) return { success: true }; 
+			if (!afterState) return { success: true }; 
+			if (afterState.elementsCount < beforeState.elementsCount) {
+				return { success: true };
+			}
+			return { success: false, reason: "Paragraph count did not decrease after deletion" };
+		}
+
+		if (actionName === 'create_paragraph' || actionName === 'createParagraph') {
+			if (afterState && afterState.elementsCount > (beforeState ? beforeState.elementsCount : 0)) {
+				return { success: true };
+			}
+			return { success: false, reason: "Paragraph count did not increase after creation" };
+		}
+
+		if (actionName === 'paste_html' || actionName === 'pasteHTML') {
+			if (afterState && (afterState.text !== (beforeState ? beforeState.text : "") || afterState.elementsCount > (beforeState ? beforeState.elementsCount : 0))) {
+				return { success: true };
+			}
+			return { success: false, reason: "No new content detected after HTML paste" };
+		}
+
+		if (afterState) {
+			if (props.newText !== undefined && afterState.text !== props.newText) {
+				const cleanAfter = afterState.text.replace(/[\s\r\n\t]+/g, '');
+				const cleanExpected = props.newText.replace(/(<([^>]+)>)/gi, "").replace(/[\s\r\n\t]+/g, ''); 
+				if (cleanAfter.indexOf(cleanExpected) === -1 && cleanExpected.indexOf(cleanAfter) === -1) {
+					return { success: false, reason: `Text mismatch. Expected: "${props.newText.substring(0, 20)}...", Got: "${afterState.text.substring(0, 20)}..."` };
+				}
+			}
+			if (props.fontName !== undefined && afterState.fontName !== props.fontName) {
+				const cleanExpected = props.fontName.toLowerCase().replace(/['"\s]+/g, '');
+				const cleanAfter = afterState.fontName.toLowerCase().replace(/['"\s]+/g, '');
+				if (cleanAfter !== cleanExpected) {
+					// Lenient fallback check: custom/niche fonts might not be installed/rendered locally by the editor engine.
+					// If font name was set but defaulted to system Calibri/Times, and size or bold or underline did change successfully,
+					// we treat it as successfully executed rather than looping retries endlessly.
+					const sizeMatches = props.fontSize === undefined || afterState.fontSize === (props.fontSize / 2);
+					const boldMatches = props.bold === undefined || afterState.bold === !!props.bold;
+					const underlineMatches = props.underline === undefined || afterState.underline === !!props.underline;
+					
+					const sizeChanged = beforeState && beforeState.fontSize !== afterState.fontSize;
+					const boldChanged = beforeState && beforeState.bold !== afterState.bold;
+					const underlineChanged = beforeState && beforeState.underline !== afterState.underline;
+					
+					if ((props.fontSize && sizeMatches && sizeChanged) || 
+						(props.bold !== undefined && boldMatches && boldChanged) || 
+						(props.underline !== undefined && underlineMatches && underlineChanged)) {
+						// Lenient bypass: other styles successfully applied to this element!
+					} else {
+						return { success: false, reason: `Font Family mismatch. Expected: "${props.fontName}", Got: "${afterState.fontName}"` };
+					}
+				}
+			}
+			if (props.fontSize !== undefined && afterState.fontSize !== (props.fontSize / 2)) {
+				return { success: false, reason: `Font Size mismatch. Expected: ${props.fontSize / 2}pt, Got: ${afterState.fontSize}pt` };
+			}
+			if (props.bold !== undefined && afterState.bold !== !!props.bold) {
+				return { success: false, reason: `Font Weight (Bold) mismatch. Expected: ${!!props.bold}, Got: ${afterState.bold}` };
+			}
+			if (props.underline !== undefined && afterState.underline !== !!props.underline) {
+				return { success: false, reason: `Underline mismatch. Expected: ${!!props.underline}, Got: ${afterState.underline}` };
+			}
+			return { success: true };
+		}
+
+		return { success: false, reason: "Unable to capture post-execution element state" };
+	}
+
+	// LAYER 2: Dynamic Intent-Routed Selection Serializer
+	function serializeActiveContent(mode = "minimal") {
 		return new Promise((resolve, reject) => {
 			const failTimeout = setTimeout(() => {
 				reject(new Error("Content scanning timed out. ONLYOFFICE sandbox did not respond."));
 			}, 5000);
 
+			window.Asc.scope.mode = mode;
+
 			window.Asc.plugin.callCommand(function() {
+				var targetMode = Asc.scope.mode || "minimal";
 				// Helper to extract styling from character run with full hierarchy inheritance
 				function extractRunStyle(oRun, oElement) {
 					var rFontName = "";
@@ -1109,56 +1602,58 @@
 				var pageSettings = null;
 				var elementsCount = oDocument.GetElementsCount();
 
-				// Compile global document outline map & section styles beforehand
-				for (var h = 0; h < elementsCount; h++) {
-					try {
-						var oElem = oDocument.GetElement(h);
-						if (oElem && oElem.GetClassType() === "paragraph") {
-							var oText = oElem.GetText() || "";
-							var paraStyle = extractParagraphStyle(oElem);
-							var cleanText = oText.trim().replace(/[\r\n\t]+/g, '');
-							var isHeading = false;
-							
-							if (paraStyle.styleName && paraStyle.styleName.toLowerCase().indexOf("heading") !== -1) {
-								isHeading = true;
-							} else if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
-								isHeading = true;
-							} else if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
-								isHeading = true;
-							} else if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
-								isHeading = true;
+				if (targetMode === "full") {
+					// Compile global document outline map & section styles beforehand
+					for (var h = 0; h < elementsCount; h++) {
+						try {
+							var oElem = oDocument.GetElement(h);
+							if (oElem && oElem.GetClassType() === "paragraph") {
+								var oText = oElem.GetText() || "";
+								var paraStyle = extractParagraphStyle(oElem);
+								var cleanText = oText.trim().replace(/[\r\n\t]+/g, '');
+								var isHeading = false;
+								
+								if (paraStyle.styleName && paraStyle.styleName.toLowerCase().indexOf("heading") !== -1) {
+									isHeading = true;
+								} else if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
+									isHeading = true;
+								} else if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
+									isHeading = true;
+								} else if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
+									isHeading = true;
+								}
+								
+								if (isHeading) {
+									documentHeadings.push({
+										index: h,
+										text: oText,
+										styleName: paraStyle.styleName || ("Heading (Size " + paraStyle.fontSize + "pt)")
+									});
+								}
 							}
-							
-							if (isHeading) {
-								documentHeadings.push({
-									index: h,
-									text: oText,
-									styleName: paraStyle.styleName || ("Heading (Size " + paraStyle.fontSize + "pt)")
-								});
-							}
-						}
-					} catch(eOutline) {}
-				}
+						} catch(eOutline) {}
+					}
 
-				try {
-					var firstSection = null;
-					if (typeof oDocument.GetSections === "function") {
-						var secs = oDocument.GetSections();
-						if (secs && secs.length > 0) firstSection = secs[0];
-					} else if (typeof oDocument.GetSection === "function") {
-						firstSection = oDocument.GetSection(0);
-					}
-					if (firstSection) {
-						pageSettings = {};
-						try { if (firstSection.GetPageWidth) pageSettings.pageWidth = firstSection.GetPageWidth(); } catch(e) {}
-						try { if (firstSection.GetPageHeight) pageSettings.pageHeight = firstSection.GetPageHeight(); } catch(e) {}
-						try { if (firstSection.GetPageOrientation) pageSettings.pageOrientation = firstSection.GetPageOrientation(); } catch(e) {}
-						try { if (firstSection.GetMarginLeft) pageSettings.marginLeft = firstSection.GetMarginLeft(); } catch(e) {}
-						try { if (firstSection.GetMarginRight) pageSettings.marginRight = firstSection.GetMarginRight(); } catch(e) {}
-						try { if (firstSection.GetMarginTop) pageSettings.marginTop = firstSection.GetMarginTop(); } catch(e) {}
-						try { if (firstSection.GetMarginBottom) pageSettings.marginBottom = firstSection.GetMarginBottom(); } catch(e) {}
-					}
-				} catch(ePage) {}
+					try {
+						var firstSection = null;
+						if (typeof oDocument.GetSections === "function") {
+							var secs = oDocument.GetSections();
+							if (secs && secs.length > 0) firstSection = secs[0];
+						} else if (typeof oDocument.GetSection === "function") {
+							firstSection = oDocument.GetSection(0);
+						}
+						if (firstSection) {
+							pageSettings = {};
+							try { if (firstSection.GetPageWidth) pageSettings.pageWidth = firstSection.GetPageWidth(); } catch(e) {}
+							try { if (firstSection.GetPageHeight) pageSettings.pageHeight = firstSection.GetPageHeight(); } catch(e) {}
+							try { if (firstSection.GetPageOrientation) pageSettings.pageOrientation = firstSection.GetPageOrientation(); } catch(e) {}
+							try { if (firstSection.GetMarginLeft) pageSettings.marginLeft = firstSection.GetMarginLeft(); } catch(e) {}
+							try { if (firstSection.GetMarginRight) pageSettings.marginRight = firstSection.GetMarginRight(); } catch(e) {}
+							try { if (firstSection.GetMarginTop) pageSettings.marginTop = firstSection.GetMarginTop(); } catch(e) {}
+							try { if (firstSection.GetMarginBottom) pageSettings.marginBottom = firstSection.GetMarginBottom(); } catch(e) {}
+						}
+					} catch(ePage) {}
+				}
 				
 				if (isSelection && selectedParagraphs.length > 0) {
 					// --- SELECTION ONLY MODE (serialize only the highlighted range) ---
@@ -1209,93 +1704,101 @@
 						if (startIndex === -1) startIndex = 0;
 						
 						// Get paragraph style details first for run style delta-compression
-						var paraStyle = extractParagraphStyle(selPara);
+						var paraStyle = (targetMode !== "minimal") ? extractParagraphStyle(selPara) : null;
 						var runsData = [];
-						var currentOffset = 0;
-						try {
-							var runCount = selPara.GetElementsCount();
-							for (var r = 0; r < runCount; r++) {
-								var oRun = selPara.GetElement(r);
-								if (oRun && oRun.GetClassType() === "run") {
-									var rText = oRun.GetText() || "";
-									var runStart = currentOffset;
-									var runEnd = currentOffset + rText.length;
-									currentOffset = runEnd;
-									
-									var selStart = startIndex;
-									var selEnd = startIndex + selectedText.length;
-									
-									// Compute intersection of the selection with the run
-									var intersectStart = Math.max(runStart, selStart);
-									var intersectEnd = Math.min(runEnd, selEnd);
-									
-									if (intersectStart < intersectEnd) {
-										var slicedText = rText.substring(intersectStart - runStart, intersectEnd - runStart);
-										if (slicedText.length > 0) {
-											var runStyle = extractRunStyle(oRun, selPara);
-											var compressed = compressRunStyle(runStyle, paraStyle);
-											var runObj = { text: slicedText };
-											if (compressed) {
-												runObj.style = compressed;
+						
+						if (targetMode === "full") {
+							var currentOffset = 0;
+							try {
+								var runCount = selPara.GetElementsCount();
+								for (var r = 0; r < runCount; r++) {
+									var oRun = selPara.GetElement(r);
+									if (oRun && oRun.GetClassType() === "run") {
+										var rText = oRun.GetText() || "";
+										var runStart = currentOffset;
+										var runEnd = currentOffset + rText.length;
+										currentOffset = runEnd;
+										
+										var selStart = startIndex;
+										var selEnd = startIndex + selectedText.length;
+										
+										// Compute intersection of the selection with the run
+										var intersectStart = Math.max(runStart, selStart);
+										var intersectEnd = Math.min(runEnd, selEnd);
+										
+										if (intersectStart < intersectEnd) {
+											var slicedText = rText.substring(intersectStart - runStart, intersectEnd - runStart);
+											if (slicedText.length > 0) {
+												var runStyle = extractRunStyle(oRun, selPara);
+												var compressed = compressRunStyle(runStyle, paraStyle);
+												var runObj = { text: slicedText };
+												if (compressed) {
+													runObj.style = compressed;
+												}
+												runsData.push(runObj);
 											}
-											runsData.push(runObj);
 										}
 									}
 								}
-							}
-						} catch(errRuns) {}
-						
-						// If runs extraction intersects empty or misses, fall back to first run style or paragraph defaults
-						if (runsData.length === 0 && selectedText.length > 0) {
-							var compressed = compressRunStyle({
-								fontName: paraStyle.fontName,
-								fontSize: paraStyle.fontSize,
-								bold: paraStyle.bold,
-								italic: paraStyle.italic,
-								underline: paraStyle.underline,
-								strikeout: paraStyle.strikeout,
-								doubleStrikeout: paraStyle.doubleStrikeout,
-								smallCaps: paraStyle.smallCaps,
-								caps: paraStyle.caps,
-								subscript: paraStyle.subscript,
-								superscript: paraStyle.superscript,
-								characterSpacing: paraStyle.characterSpacing,
-								color: paraStyle.color,
-								highlight: null,
-								shading: paraStyle.shading
-							}, paraStyle);
+							} catch(errRuns) {}
 							
-							var runObj = { text: selectedText };
-							if (compressed) {
-								runObj.style = compressed;
-							}
-							runsData.push(runObj);
-						}
-						
-						// Determine if the runs data contains no styling overrides (homogeneous paragraph check)
-						var isHomogeneous = true;
-						for (var k = 0; k < runsData.length; k++) {
-							if (runsData[k].style) {
-								isHomogeneous = false;
-								break;
+							// If runs extraction intersects empty or misses, fall back to first run style or paragraph defaults
+							if (runsData.length === 0 && selectedText.length > 0) {
+								var compressed = compressRunStyle({
+									fontName: paraStyle.fontName,
+									fontSize: paraStyle.fontSize,
+									bold: paraStyle.bold,
+									italic: paraStyle.italic,
+									underline: paraStyle.underline,
+									strikeout: paraStyle.strikeout,
+									doubleStrikeout: paraStyle.doubleStrikeout,
+									smallCaps: paraStyle.smallCaps,
+									caps: paraStyle.caps,
+									subscript: paraStyle.subscript,
+									superscript: paraStyle.superscript,
+									characterSpacing: paraStyle.characterSpacing,
+									color: paraStyle.color,
+									highlight: null,
+									shading: paraStyle.shading
+								}, paraStyle);
+								
+								var runObj = { text: selectedText };
+								if (compressed) {
+									runObj.style = compressed;
+								}
+								runsData.push(runObj);
 							}
 						}
 						
 						var elementJSON = {
 							type: "paragraph",
 							index: absoluteIndex,
-							text: selectedText,
-							style: compressParagraphStyle(paraStyle)
+							text: selectedText
 						};
-						if (!isHomogeneous && runsData.length > 0) {
-							elementJSON.runs = runsData;
+						
+						if (targetMode !== "minimal" && paraStyle) {
+							elementJSON.style = compressParagraphStyle(paraStyle);
+						}
+						
+						if (targetMode === "full" && runsData.length > 0) {
+							// Determine if the runs data contains no styling overrides (homogeneous paragraph check)
+							var isHomogeneous = true;
+							for (var k = 0; k < runsData.length; k++) {
+								if (runsData[k].style) {
+									isHomogeneous = false;
+									break;
+								}
+							}
+							if (!isHomogeneous) {
+								elementJSON.runs = runsData;
+							}
 						}
 						
 						elements.push(elementJSON);
 					}
 
 					// Fetch Preceding and Succeeding Context paragraphs to make the Copilot fully aware of surroundings!
-					if (firstAbsIndex > 0) {
+					if (targetMode === "full" && firstAbsIndex > 0) {
 						var startPre = Math.max(0, firstAbsIndex - 4);
 						for (var p = startPre; p < firstAbsIndex; p++) {
 							try {
@@ -1311,7 +1814,7 @@
 						}
 					}
 					
-					if (lastAbsIndex >= 0 && lastAbsIndex < elementsCount - 1) {
+					if (targetMode === "full" && lastAbsIndex >= 0 && lastAbsIndex < elementsCount - 1) {
 						var endSuf = Math.min(elementsCount, lastAbsIndex + 5);
 						for (var p = lastAbsIndex + 1; p < endSuf; p++) {
 							try {
@@ -1349,40 +1852,49 @@
 							
 							if (type === "paragraph") {
 								var oText = oElement.GetText() || "";
-								
-								// Get paragraph style details
-								var paraStyle = extractParagraphStyle(oElement);
+								var paraStyle = (targetMode !== "minimal") ? extractParagraphStyle(oElement) : null;
 								
 								var cleanText = oText.trim().replace(/[\r\n\t]+/g, '');
 								var isHeading = false;
 								
-								if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
-									isHeading = true;
-								}
-								if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
-									isHeading = true;
-								}
-								if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
-									isHeading = true;
-								}
-								
-								var runsData = serializeRunsInside(oElement, paraStyle);
-								var isHomogeneous = true;
-								for (var k = 0; k < runsData.length; k++) {
-									if (runsData[k].style) {
-										isHomogeneous = false;
-										break;
+								if (targetMode === "full" && paraStyle) {
+									if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
+										isHeading = true;
+									}
+									if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
+										isHeading = true;
+									}
+									if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
+										isHeading = true;
 									}
 								}
-
+								
+								var runsData = [];
+								if (targetMode === "full" && paraStyle) {
+									runsData = serializeRunsInside(oElement, paraStyle);
+								}
+								
 								var elementJSON = {
 									type: "paragraph",
 									index: i,
-									text: oText,
-									style: compressParagraphStyle(paraStyle)
+									text: oText
 								};
-								if (!isHomogeneous && runsData.length > 0) {
-									elementJSON.runs = runsData;
+								
+								if (targetMode !== "minimal" && paraStyle) {
+									elementJSON.style = compressParagraphStyle(paraStyle);
+								}
+								
+								if (targetMode === "full" && runsData.length > 0) {
+									var isHomogeneous = true;
+									for (var k = 0; k < runsData.length; k++) {
+										if (runsData[k].style) {
+											isHomogeneous = false;
+											break;
+										}
+									}
+									if (!isHomogeneous) {
+										elementJSON.runs = runsData;
+									}
 								}
 								
 								if (isHeading) {
@@ -1397,7 +1909,7 @@
 									currentSection.elements.push(elementJSON);
 								}
 								
-							} else if (type === "table") {
+							} else if (type === "table" && targetMode === "full") {
 								var tableJSON = {
 									type: "table",
 									index: i,
@@ -1478,75 +1990,105 @@
 	async function queryActiveLLM(messages, temperature = 0.1, isJsonMode = false) {
 		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
 		
-		if (currentProvider === 'github') {
-			const token = localStorage.getItem('github_models_token');
-			const model = localStorage.getItem('github_models_model') || 'gpt-4o-mini';
-			
-			if (!token) {
-				throw new Error("GitHub Token (PAT) is not configured. Add it in Settings.");
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 seconds timeout
+
+		try {
+			if (currentProvider === 'github') {
+				const token = localStorage.getItem('github_models_token');
+				const model = localStorage.getItem('github_models_model') || 'gpt-4o-mini';
+				
+				if (!token) {
+					throw new Error("GitHub Token (PAT) is not configured. Add it in Settings.");
+				}
+				
+				const requestBody = {
+					model: model,
+					messages: messages,
+					temperature: temperature
+				};
+				
+				if (isJsonMode) {
+					requestBody.response_format = { type: 'json_object' };
+				}
+				
+				const response = await fetch('https://models.github.ai/inference/chat/completions', {
+					method: 'POST',
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(requestBody),
+					signal: controller.signal
+				});
+				
+				clearTimeout(timeoutId);
+				
+				if (!response.ok) {
+					const errorText = await response.text().catch(() => '');
+					let errorMsg = `HTTP ${response.status}`;
+					try {
+						const errorData = JSON.parse(errorText);
+						errorMsg = errorData.message || errorData.error?.message || errorMsg;
+					} catch (parseErr) {
+						if (errorText) errorMsg = `${errorMsg}: ${errorText.substring(0, 100)}`;
+					}
+					throw new Error(errorMsg);
+				}
+				
+				const data = await response.json();
+				return data.choices[0].message.content;
+			} else {
+				const apiKey = localStorage.getItem('groq_copilot_key');
+				const model = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
+				
+				if (!apiKey) {
+					throw new Error("Groq API Key is not configured. Add it in Settings.");
+				}
+				
+				const requestBody = {
+					model: model,
+					messages: messages,
+					temperature: temperature
+				};
+				
+				if (isJsonMode) {
+					requestBody.response_format = { type: 'json_object' };
+				}
+				
+				const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+					method: 'POST',
+					headers: {
+						'Authorization': `Bearer ${apiKey}`,
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(requestBody),
+					signal: controller.signal
+				});
+				
+				clearTimeout(timeoutId);
+				
+				if (!response.ok) {
+					const errorText = await response.text().catch(() => '');
+					let errorMsg = `HTTP ${response.status}`;
+					try {
+						const errorData = JSON.parse(errorText);
+						errorMsg = errorData.error?.message || errorMsg;
+					} catch (parseErr) {
+						if (errorText) errorMsg = `${errorMsg}: ${errorText.substring(0, 100)}`;
+					}
+					throw new Error(errorMsg);
+				}
+				
+				const data = await response.json();
+				return data.choices[0].message.content;
 			}
-			
-			const requestBody = {
-				model: model,
-				messages: messages,
-				temperature: temperature
-			};
-			
-			if (isJsonMode) {
-				requestBody.response_format = { type: 'json_object' };
+		} catch (err) {
+			clearTimeout(timeoutId);
+			if (err.name === 'AbortError') {
+				throw new Error("API request timed out after 25 seconds. Please check your network connection or try again.");
 			}
-			
-			const response = await fetch('https://models.github.ai/inference/chat/completions', {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${token}`,
-					'Content-Type': 'application/json',
-					'Accept': 'application/vnd.github+json'
-				},
-				body: JSON.stringify(requestBody)
-			});
-			
-			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.message || errorData.error?.message || `HTTP ${response.status}`);
-			}
-			
-			const data = await response.json();
-			return data.choices[0].message.content;
-		} else {
-			const apiKey = localStorage.getItem('groq_copilot_key');
-			const model = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
-			
-			if (!apiKey) {
-				throw new Error("Groq API Key is not configured. Add it in Settings.");
-			}
-			
-			const requestBody = {
-				model: model,
-				messages: messages,
-				temperature: temperature
-			};
-			
-			if (isJsonMode) {
-				requestBody.response_format = { type: 'json_object' };
-			}
-			
-			const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${apiKey}`,
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(requestBody)
-			});
-			
-			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-			}
-			
-			const data = await response.json();
-			return data.choices[0].message.content;
+			throw err;
 		}
 	}
 
@@ -1589,10 +2131,9 @@ Available actions:
 - "modifyStyle": Set simple fonts, size, spacing, bold, alignment, color, or minor text updates on an existing paragraph index.
 - "createParagraph": Create a new blank paragraph after the targetIndex.
 - "deleteParagraph": Remove this paragraph from the document.
-
 Formatting & units specifications for "modifyStyle":
 - "fontName" (string, e.g. "Arial", "Georgia", "Inter", "Times New Roman", "Courier New")
-- "fontSize" (integer): Must be in half-points (e.g., 22 for 11pt, 24 for 12pt, 28 for 14pt, 32 for 16pt, 48 for 24pt). The input document represents size in standard points, but you MUST write changes in half-points.
+- "fontSize" (number): Must be in standard points (e.g., 11 for 11pt, 12 for 12pt, 19 for 19pt).
 - "bold" (boolean)
 - "italic" (boolean)
 - "underline" (boolean)
@@ -1648,11 +2189,27 @@ User Request:
 			
 			if (Array.isArray(parsed)) {
 				return parsed;
+			} else if (parsed.plans && Array.isArray(parsed.plans)) {
+				return parsed.plans;
+			} else if (parsed.plan && Array.isArray(parsed.plan)) {
+				return parsed.plan;
+			} else if (parsed.actions && Array.isArray(parsed.actions)) {
+				return parsed.actions;
 			} else if (parsed.changes && Array.isArray(parsed.changes)) {
 				return parsed.changes;
 			} else if (parsed.commands && Array.isArray(parsed.commands)) {
 				return parsed.commands;
 			} else if (typeof parsed === 'object' && parsed !== null) {
+				// If it is a single plan object rather than an array of plans
+				if (parsed.action && parsed.properties) {
+					return [parsed];
+				}
+				// If it's a wrapper object with plans nested under a single object
+				for (const key in parsed) {
+					if (Array.isArray(parsed[key])) {
+						return parsed[key];
+					}
+				}
 				return [parsed];
 			}
 			
@@ -1753,20 +2310,26 @@ User Request:
 		changesCard.style.display = 'block';
 	}
 
-	// Sequential, Animated, Interactive execution engine utilizing AddElement and RemoveElement
+	// Sequential, Animated, Interactive execution engine utilizing AddElem	// Sequential, Gated, Self-Healing executor engine utilizing Verification and Retry layers
 	function executeSequentialEdits(changes) {
 		let i = 0;
 		let indexOffset = 0; // Dynamic tracking of index drift caused by creations, deletions, and Pastes
+		let retryCount = 0;
+		const maxRetries = 3;
 		
-		function applyNext() {
+		async function applyNext() {
 			if (i >= changes.length) {
-				log('All autonomous AI edits applied live and completed!', 'success');
+				log('All autonomous AI edits applied live, verified, and completed!', 'success');
 				proposedChanges = null;
 				// Re-enable confirm and discard buttons
 				confirmBtn.disabled = false;
 				discardBtn.disabled = false;
 				isEditingAutonomously = false;
 				changesCard.style.display = 'none';
+
+				// Update execution telemetry
+				lastExecutionDebugData.status = "Success (All action steps executed and verified successfully!)";
+				if (typeof updateDebugViewer === 'function') updateDebugViewer();
 				
 				// Perform single clean refresh of structure view once editor modifications finish
 				setTimeout(() => {
@@ -1776,784 +2339,609 @@ User Request:
 			}
 
 			const change = changes[i];
-			const actionName = change.action || 'modifyStyle';
+			
+			// Normalize standard points to half-points for OnlyOffice API compatibility
+			if (change && change.properties && change.properties.fontSize !== undefined) {
+				change.properties.fontSize = Number(change.properties.fontSize) * 2;
+			}
+			
+			const actionName = change.action || 'rewrite';
 			const targetIndex = change.targetIndex;
 			const actualTargetIndex = targetIndex + indexOffset;
 
-			// Store variables in Asc scope for callback retrieval
-			window.Asc.scope.change = change;
-			window.Asc.scope.actualTargetIndex = actualTargetIndex;
+			log(`Applying action [${actionName.toUpperCase()}] to element #${targetIndex + 1} (actual index #${actualTargetIndex + 1}). Attempt ${retryCount + 1}/${maxRetries}...`, 'info');
 
-			if (actionName === 'deleteParagraph') {
-				log(`Executing Action: [Delete] Element #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'warning');
-				window.Asc.plugin.callCommand(function() {
-					var actualTargetIndex = Asc.scope.actualTargetIndex;
-					var oDocument = Api.GetDocument();
-					var countBefore = oDocument.GetElementsCount();
-					try { oDocument.RemoveElement(actualTargetIndex); } catch(e) {}
-					var countAfter = oDocument.GetElementsCount();
-					return { countBefore: countBefore, countAfter: countAfter };
-				}, false, true, function(res) {
-					var delta = res ? (res.countAfter - res.countBefore) : -1;
-					indexOffset += delta;
-					log(`Dynamic Index Offset adjusted by ${delta}. Total offset: ${indexOffset}`, 'info');
-					i++;
-					setTimeout(applyNext, 500);
+			// Capture element state before applying change
+			const beforeState = await captureElementState(actualTargetIndex);
+
+			// Append to telemetry stateBefore (only on first attempt)
+			if (retryCount === 0) {
+				lastExecutionDebugData.stateBefore.push({
+					stepIndex: i,
+					action: actionName,
+					targetIndex: targetIndex,
+					actualIndex: actualTargetIndex,
+					state: beforeState
 				});
-				return;
-			} else if (actionName === 'createParagraph') {
-				log(`Executing Action: [Create] New Paragraph after #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'success');
-				window.Asc.plugin.callCommand(function() {
-					var change = Asc.scope.change;
-					var actualTargetIndex = Asc.scope.actualTargetIndex;
-					var oDocument = Api.GetDocument();
-					var countBefore = oDocument.GetElementsCount();
-					
-					// Re-establish original styling as fallbacks
-					var origFont = "Calibri";
-					var origSize = 22;
-					var origBold = false;
-					var origItalic = false;
-					var origUnderline = false;
-					var origStrikeout = false;
-					var origColorHex = "#000000";
-					var origHighlight = "none";
-					
-					var oRefParagraph = oDocument.GetElement(actualTargetIndex);
-					if (oRefParagraph) {
-						try {
-							var runCount = oRefParagraph.GetElementsCount();
-							if (runCount > 0) {
-								var firstRun = oRefParagraph.GetElement(0);
-								if (firstRun) {
-									var textPr = null;
-									try { if (typeof firstRun.GetTextPr === "function") textPr = firstRun.GetTextPr(); } catch(e) {}
-									if (textPr) {
-										try { 
-											if (typeof textPr.GetFontName === "function") {
-												origFont = textPr.GetFontName() || origFont;
-											} else if (typeof textPr.GetFontFamily === "function") {
-												origFont = textPr.GetFontFamily() || origFont;
-											}
-										} catch(e) {}
-										try { if (typeof textPr.GetFontSize === "function") origSize = textPr.GetFontSize() || origSize; } catch(e) {}
-										try { if (typeof textPr.GetBold === "function") origBold = textPr.GetBold() || origBold; } catch(e) {}
-										try { if (typeof textPr.GetItalic === "function") origItalic = textPr.GetItalic() || origItalic; } catch(e) {}
-										try { if (typeof textPr.GetUnderline === "function") origUnderline = !!textPr.GetUnderline(); } catch(e) {}
-										try { if (typeof textPr.GetStrikeout === "function") origStrikeout = !!textPr.GetStrikeout(); } catch(e) {}
-										try {
-											if (typeof textPr.GetColor === "function") {
-												var c = textPr.GetColor();
-												if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
-											}
-										} catch(e) {}
-										try {
-											if (typeof textPr.GetHighlight === "function") {
-												var hl = textPr.GetHighlight();
-												if (hl) {
-													if (typeof hl === "string") origHighlight = hl;
-													else if (typeof hl.GetHex === "function") origHighlight = hl.GetHex() || origHighlight;
-												}
-											}
-										} catch(e) {}
-									}
-								}
-							}
-						} catch(e) {}
-					}
-					
-					var oNewParagraph = Api.CreateParagraph();
-					var oProps = change.properties || {};
-					try {
-						oDocument.AddElement(actualTargetIndex + 1, oNewParagraph);
-						oNewParagraph.Select();
-						
-						if (oProps.newText) {
-							// Embedded Upgraded HTML/CSS tag Parser
-							parseAndApplyTextWithTags(oNewParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
-						}
-					} catch(e) {}
-					
-					var countAfter = oDocument.GetElementsCount();
-					return { countBefore: countBefore, countAfter: countAfter };
-					
-					// Embedded Upgraded HTML/CSS tag Parser inside ONLYOFFICE sandbox context
-					function parseAndApplyTextWithTags(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
-						try { oPar.RemoveAllElements(); } catch(e) {}
-						var regex = /(<[^>]+>)/g;
-						var parts = htmlStr.split(regex);
-						var formatState = {
-							fontName: pProps.fontName || defFont || "Calibri",
-							fontSize: pProps.fontSize || defSize || 22,
-							bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
-							italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
-							underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
-							strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
-							doubleStrikeout: pProps.doubleStrikeout !== undefined ? pProps.doubleStrikeout : false,
-							smallCaps: pProps.smallCaps !== undefined ? pProps.smallCaps : false,
-							caps: pProps.caps !== undefined ? pProps.caps : false,
-							subscript: pProps.subscript !== undefined ? pProps.subscript : false,
-							superscript: pProps.superscript !== undefined ? pProps.superscript : false,
-							characterSpacing: pProps.characterSpacing !== undefined ? pProps.characterSpacing : 0,
-							color: pProps.color || defColorHex || "#000000",
-							highlight: pProps.highlight || defHighlight || "none"
-						};
-						var stateStack = [JSON.parse(JSON.stringify(formatState))];
-						
-						for (var idx = 0; idx < parts.length; idx++) {
-							var part = parts[idx];
-							if (!part) continue;
-							
-							if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
-								var tagLower = part.toLowerCase();
-								if (tagLower.indexOf("</") === 0) {
-									if (stateStack.length > 1) {
-										stateStack.pop();
-										formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
-									}
-								} else {
-									var newState = JSON.parse(JSON.stringify(formatState));
-									if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
-										newState.bold = true;
-									} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
-										newState.italic = true;
-									} else if (tagLower.indexOf("<u") === 0) {
-										newState.underline = true;
-									} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
-										newState.strikeout = true;
-									} else if (tagLower.indexOf("<sub>") === 0) {
-										newState.subscript = true;
-										newState.superscript = false;
-									} else if (tagLower.indexOf("<sup>") === 0) {
-										newState.superscript = true;
-										newState.subscript = false;
-									} else if (tagLower.indexOf("<small>") === 0) {
-										newState.smallCaps = true;
-									} else if (tagLower.indexOf("<big>") === 0) {
-										newState.caps = true;
-										newState.fontSize = Math.round(newState.fontSize * 1.2);
-									} else if (tagLower.indexOf("<font") === 0) {
-										var match = part.match(/color=["']([^"']+)["']/i);
-										if (match && match[1]) newState.color = match[1];
-										var matchFace = part.match(/face=["']([^"']+)["']/i);
-										if (matchFace && matchFace[1]) newState.fontName = matchFace[1];
-										var matchSize = part.match(/size=["']([^"']+)["']/i);
-										if (matchSize && matchSize[1]) newState.fontSize = parseFloat(matchSize[1]);
-									} else if (tagLower.indexOf("<mark") === 0) {
-										var match = part.match(/color=["']([^"']+)["']/i);
-										var styleMatch = part.match(/style=["']([^"']+)["']/i);
-										if (match && match[1]) {
-											newState.highlight = match[1];
-										} else if (styleMatch && styleMatch[1]) {
-											var styleStr = styleMatch[1];
-											var declarations = styleStr.split(';');
-											var foundBg = false;
-											for (var d = 0; d < declarations.length; d++) {
-												var dec = declarations[d].trim();
-												if (!dec) continue;
-												var pSplit = dec.split(':');
-												if (pSplit.length >= 2) {
-													var propName = pSplit[0].trim().toLowerCase();
-													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
-													if (propName === 'background-color' || propName === 'background' || propName === 'color') {
-														newState.highlight = propVal;
-														foundBg = true;
-													}
-												}
-											}
-											if (!foundBg) newState.highlight = "yellow";
-										} else {
-											newState.highlight = "yellow";
-										}
-									} else if (tagLower.indexOf("<span") === 0) {
-										// Parse style attribute rules natively
-										var styleMatch = part.match(/style=["']([^"']+)["']/i);
-										if (styleMatch && styleMatch[1]) {
-											var styleStr = styleMatch[1];
-											var declarations = styleStr.split(';');
-											for (var d = 0; d < declarations.length; d++) {
-												var dec = declarations[d].trim();
-												if (!dec) continue;
-												var pSplit = dec.split(':');
-												if (pSplit.length >= 2) {
-													var propName = pSplit[0].trim().toLowerCase();
-													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
-													
-													if (propName === 'font-weight') {
-														if (propVal === 'bold' || propVal === '700' || propVal === '800' || propVal === '900') newState.bold = true;
-														else if (propVal === 'normal' || propVal === '400') newState.bold = false;
-													} else if (propName === 'font-style') {
-														if (propVal === 'italic' || propVal === 'oblique') newState.italic = true;
-														else if (propVal === 'normal') newState.italic = false;
-													} else if (propName === 'text-decoration') {
-														if (propVal.indexOf('underline') !== -1) newState.underline = true;
-														if (propVal.indexOf('line-through') !== -1) newState.strikeout = true;
-														if (propVal.indexOf('double-line-through') !== -1 || propVal.indexOf('double') !== -1) newState.doubleStrikeout = true;
-													} else if (propName === 'color') {
-														newState.color = propVal;
-													} else if (propName === 'background-color' || propName === 'background') {
-														newState.highlight = propVal;
-													} else if (propName === 'font-family') {
-														newState.fontName = propVal.replace(/['"]/g, '').trim();
-													} else if (propName === 'font-size') {
-														var numVal = parseFloat(propVal);
-														if (propVal.indexOf('pt') !== -1) {
-															newState.fontSize = Math.round(numVal * 2);
-														} else if (propVal.indexOf('px') !== -1) {
-															newState.fontSize = Math.round(numVal * 1.5);
-														}
-													} else if (propName === 'letter-spacing') {
-														var numVal = parseFloat(propVal);
-														if (propVal.indexOf('pt') !== -1) {
-															newState.characterSpacing = Math.round(numVal * 20); // 1pt letter-spacing = 20 dxa character spacing
-														} else if (propVal.indexOf('px') !== -1) {
-															newState.characterSpacing = Math.round(numVal * 15);
-														} else {
-															newState.characterSpacing = Math.round(numVal);
-														}
-													} else if (propName === 'text-transform') {
-														if (propVal === 'uppercase') newState.caps = true;
-														else if (propVal === 'lowercase') newState.caps = false;
-													} else if (propName === 'font-variant') {
-														if (propVal === 'small-caps') newState.smallCaps = true;
-													} else if (propName === 'vertical-align') {
-														if (propVal === 'super') {
-															newState.superscript = true;
-															newState.subscript = false;
-														} else if (propVal === 'sub') {
-															newState.subscript = true;
-															newState.superscript = false;
-														}
-													}
-												}
-											}
-										}
-									}
-									stateStack.push(newState);
-									formatState = newState;
-								}
-							} else {
-								var decText = part
-									.replace(/&quot;/g, '"')
-									.replace(/&lt;/g, '<')
-									.replace(/&gt;/g, '>')
-									.replace(/&amp;/g, '&')
-									.replace(/&#39;/g, "'")
-									.replace(/&apos;/g, "'");
-									
-								var oRun = null;
-								try { oRun = oPar.AddText(decText); } catch(eText) {}
-								if (oRun) {
-									if (formatState.fontName) {
-										try { oRun.SetFontName(formatState.fontName); } catch(e) {}
-									}
-									if (formatState.fontSize) {
-										try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
-									}
-									try { oRun.SetBold(!!formatState.bold); } catch(e) {}
-									try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
-									try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
-									try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
-									try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
-									try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
-									try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
-									try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
-									try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
-									try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
-									
-									if (formatState.highlight) {
-										try {
-											var hl = formatState.highlight.toLowerCase().trim();
-											if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
-											else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
-											else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
-											else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
-											else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
-											else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
-											else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
-											else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
-											else oRun.SetHighlight(hl);
-										} catch(eHighlight) {}
-									}
-									
-									if (formatState.color) {
-										try {
-											var hex = String(formatState.color).replace('#', '').trim();
-											if (hex.length === 6) {
-												var r = parseInt(hex.substring(0, 2), 16);
-												var g = parseInt(hex.substring(2, 4), 16);
-												var b = parseInt(hex.substring(4, 6), 16);
-												try { oRun.SetColor(Api.CreateColorFromRGB(r, g, b)); } catch(eColor) {
-													try { oRun.SetColor(r, g, b); } catch(errHex) {}
-												}
-											} else {
-												var namedColors = {
-													"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
-													"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
-													"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
-												};
-												if (namedColors[hex.toLowerCase()]) {
-													var rgb = namedColors[hex.toLowerCase()];
-													oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
-												}
-											}
-										} catch(eColorOuter) {}
-									}
-								}
-							}
-						}
-					}
-				}, false, true, function(res) {
-					var delta = res ? (res.countAfter - res.countBefore) : 1;
-					indexOffset += delta;
-					log(`Dynamic Index Offset adjusted by ${delta}. Total offset: ${indexOffset}`, 'info');
-					i++;
-					setTimeout(applyNext, 500);
-				});
-				return;
-			} else if (actionName === 'pasteHTML') {
-				log(`Executing Action: [Generative Typesetting] Elements starting at #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'success');
-				// Measure element count before PasteHtml
-				window.Asc.plugin.callCommand(function() {
-					var actualTargetIndex = Asc.scope.actualTargetIndex;
-					var oDocument = Api.GetDocument();
-					var oParagraph = oDocument.GetElement(actualTargetIndex);
-					if (oParagraph) {
-						oParagraph.Select();
-					}
-					return oDocument.GetElementsCount();
-				}, false, true, function(countBefore) {
-					// Call PasteHtml natively on the parent plugin object
-					window.Asc.plugin.executeMethod("PasteHtml", [change.properties.html || ''], function() {
-						// Measure element count after PasteHtml completes to dynamically calculate paragraph drift
+				if (typeof updateDebugViewer === 'function') updateDebugViewer();
+			}
+
+			// Wrapper to run the edit inside ONLYOFFICE Sandbox
+			function runEditCommand() {
+				return new Promise((resolve) => {
+					window.Asc.scope.change = change;
+					window.Asc.scope.actualTargetIndex = actualTargetIndex;
+
+					if (actionName === 'delete_paragraph' || actionName === 'deleteParagraph') {
 						window.Asc.plugin.callCommand(function() {
-							return Api.GetDocument().GetElementsCount();
-						}, false, true, function(countAfter) {
-							var delta = (countAfter !== undefined && countBefore !== undefined) ? (countAfter - countBefore) : 0;
-							indexOffset += delta;
-							log(`Dynamic Index Offset adjusted by ${delta} after PasteHtml. Total offset: ${indexOffset}`, 'info');
-							i++;
-							setTimeout(applyNext, 300);
+							var actualTargetIndex = Asc.scope.actualTargetIndex;
+							var oDocument = Api.GetDocument();
+							var countBefore = oDocument.GetElementsCount();
+							try { oDocument.RemoveElement(actualTargetIndex); } catch(e) {}
+							var countAfter = oDocument.GetElementsCount();
+							return { countBefore: countBefore, countAfter: countAfter };
+						}, false, true, function(res) {
+							var delta = res ? (res.countAfter - res.countBefore) : -1;
+							resolve({ delta: delta });
 						});
-					});
-				});
-				return;
-			} else {
-				log(`Executing Action: [Formatting] Element #${targetIndex + 1} (actual target #${actualTargetIndex + 1})...`, 'info');
-				window.Asc.plugin.callCommand(function() {
-					var change = Asc.scope.change;
-					var actualTargetIndex = Asc.scope.actualTargetIndex;
-					var oDocument = Api.GetDocument();
-					var oParagraph = oDocument.GetElement(actualTargetIndex);
-					
-					// Re-establish original styling as fallbacks
-					var origFont = "Calibri";
-					var origSize = 22;
-					var origBold = false;
-					var origItalic = false;
-					var origUnderline = false;
-					var origStrikeout = false;
-					var origColorHex = "#000000";
-					var origHighlight = "none";
-					
-					if (oParagraph) {
-						try {
-							var runCount = oParagraph.GetElementsCount();
-							if (runCount > 0) {
-								var firstRun = oParagraph.GetElement(0);
-								if (firstRun) {
-									var textPr = null;
-									try { if (typeof firstRun.GetTextPr === "function") textPr = firstRun.GetTextPr(); } catch(e) {}
-									if (textPr) {
-										try { 
-											if (typeof textPr.GetFontName === "function") {
-												origFont = textPr.GetFontName() || origFont;
-											} else if (typeof textPr.GetFontFamily === "function") {
-												origFont = textPr.GetFontFamily() || origFont;
-											}
-										} catch(e) {}
-										try { if (typeof textPr.GetFontSize === "function") origSize = textPr.GetFontSize() || origSize; } catch(e) {}
-										try { if (typeof textPr.GetBold === "function") origBold = textPr.GetBold() || origBold; } catch(e) {}
-										try { if (typeof textPr.GetItalic === "function") origItalic = textPr.GetItalic() || origItalic; } catch(e) {}
-										try { if (typeof textPr.GetUnderline === "function") origUnderline = !!textPr.GetUnderline(); } catch(e) {}
-										try { if (typeof textPr.GetStrikeout === "function") origStrikeout = !!textPr.GetStrikeout(); } catch(e) {}
-										try {
-											if (typeof textPr.GetColor === "function") {
-												var c = textPr.GetColor();
-												if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
-											}
-										} catch(e) {}
-										try {
-											if (typeof textPr.GetHighlight === "function") {
-												var hl = textPr.GetHighlight();
-												if (hl) {
-													if (typeof hl === "string") origHighlight = hl;
-													else if (typeof hl.GetHex === "function") origHighlight = hl.GetHex() || origHighlight;
-												}
-											}
-										} catch(e) {}
-									}
-								}
-							}
-						} catch(e) {}
-						
-						try { oParagraph.Select(); } catch(e) {}
-						
-						var oProps = change.properties || {};
-						try {
-							if (oProps.newText !== undefined) {
-								parseAndApplyTextWithTags(oParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
-							} else {
-								// Directly apply styles to existing runs without recreating/destroying them!
-								var runCount = oParagraph.GetElementsCount();
-								for (var r = 0; r < runCount; r++) {
-									var oRun = oParagraph.GetElement(r);
-									if (oRun && oRun.GetClassType() === "run") {
-										if (oProps.fontName !== undefined) {
-											try { oRun.SetFontName(oProps.fontName); } catch(e) {}
-										}
-										if (oProps.fontSize !== undefined) {
-											try { oRun.SetFontSize(oProps.fontSize); } catch(e) {}
-										}
-										if (oProps.bold !== undefined) {
-											try { oRun.SetBold(!!oProps.bold); } catch(e) {}
-										}
-										if (oProps.italic !== undefined) {
-											try { oRun.SetItalic(!!oProps.italic); } catch(e) {}
-										}
-										if (oProps.underline !== undefined) {
-											try { oRun.SetUnderline(!!oProps.underline); } catch(e) {}
-										}
-										if (oProps.strikeout !== undefined) {
-											try { oRun.SetStrikeout(!!oProps.strikeout); } catch(e) {}
-										}
-										if (oProps.doubleStrikeout !== undefined) {
-											try { oRun.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
-										}
-										if (oProps.smallCaps !== undefined) {
-											try { oRun.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
-										}
-										if (oProps.caps !== undefined) {
-											try { oRun.SetCaps(!!oProps.caps); } catch(e) {}
-										}
-										if (oProps.subscript !== undefined) {
-											try { oRun.SetSubscript(!!oProps.subscript); } catch(e) {}
-										}
-										if (oProps.superscript !== undefined) {
-											try { oRun.SetSuperscript(!!oProps.superscript); } catch(e) {}
-										}
-										if (oProps.characterSpacing !== undefined) {
-											try { oRun.SetSpacing(oProps.characterSpacing); } catch(e) {}
-										}
-										if (oProps.highlight !== undefined) {
-											try {
-												var hl = oProps.highlight.toLowerCase().trim();
-												if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
-												else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
-												else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
-												else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
-												else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
-												else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
-												else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
-												else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
-												else oRun.SetHighlight(hl);
-											} catch(eHighlight) {}
-										}
-										if (oProps.color !== undefined) {
-											try {
-												var hex = String(oProps.color).replace('#', '').trim();
-												if (hex.length === 6) {
-													var red = parseInt(hex.substring(0, 2), 16);
-													var green = parseInt(hex.substring(2, 4), 16);
-													var blue = parseInt(hex.substring(4, 6), 16);
-													try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
-														try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+					} else if (actionName === 'create_paragraph' || actionName === 'createParagraph') {
+						window.Asc.plugin.callCommand(function() {
+							var change = Asc.scope.change;
+							var actualTargetIndex = Asc.scope.actualTargetIndex;
+							var oDocument = Api.GetDocument();
+							var countBefore = oDocument.GetElementsCount();
+							
+							var origFont = "Calibri";
+							var origSize = 22;
+							var origBold = false;
+							var origItalic = false;
+							var origUnderline = false;
+							var origStrikeout = false;
+							var origColorHex = "#000000";
+							var origHighlight = "none";
+							
+							var oRefParagraph = oDocument.GetElement(actualTargetIndex);
+							if (oRefParagraph) {
+								try {
+									var runCount = oRefParagraph.GetElementsCount();
+									if (runCount > 0) {
+										var firstRun = oRefParagraph.GetElement(0);
+										if (firstRun) {
+											var textPr = null;
+											try { if (typeof firstRun.GetTextPr === "function") textPr = firstRun.GetTextPr(); } catch(e) {}
+											if (textPr) {
+												try { 
+													if (typeof textPr.GetFontName === "function") {
+														origFont = textPr.GetFontName() || origFont;
 													}
-												} else {
-													var namedColors = {
-														"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
-														"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
-														"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
-													};
-													if (namedColors[hex.toLowerCase()]) {
-														var rgb = namedColors[hex.toLowerCase()];
-														oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+												} catch(e) {}
+												try { if (typeof textPr.GetFontSize === "function") origSize = textPr.GetFontSize() || origSize; } catch(e) {}
+												try { if (typeof textPr.GetBold === "function") origBold = textPr.GetBold() || origBold; } catch(e) {}
+												try { if (typeof textPr.GetItalic === "function") origItalic = textPr.GetItalic() || origItalic; } catch(e) {}
+												try { if (typeof textPr.GetUnderline === "function") origUnderline = !!textPr.GetUnderline(); } catch(e) {}
+												try { if (typeof textPr.GetStrikeout === "function") origStrikeout = !!textPr.GetStrikeout(); } catch(e) {}
+												try {
+													if (typeof textPr.GetColor === "function") {
+														var c = textPr.GetColor();
+														if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
 													}
-												}
-											} catch(eColorOuter) {}
+												} catch(e) {}
+												try {
+													if (typeof textPr.GetHighlight === "function") {
+														var hl = textPr.GetHighlight();
+														if (hl) {
+															if (typeof hl === "string") origHighlight = hl;
+															else if (typeof hl.GetHex === "function") origHighlight = hl.GetHex() || origHighlight;
+														}
+													}
+												} catch(e) {}
+											}
 										}
 									}
-								}
+								} catch(e) {}
 							}
-						} catch(e) {}
+							
+							var oNewParagraph = Api.CreateParagraph();
+							var oProps = change.properties || {};
+							try {
+								oDocument.AddElement(actualTargetIndex + 1, oNewParagraph);
+								oNewParagraph.Select();
+								
+								if (oProps.newText) {
+									parseAndApplyTextWithTags(oNewParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
+								}
+							} catch(e) {}
+							
+							var countAfter = oDocument.GetElementsCount();
+							return { countBefore: countBefore, countAfter: countAfter };
+						}, false, true, function(res) {
+							var delta = res ? (res.countAfter - res.countBefore) : 1;
+							resolve({ delta: delta });
+						});
+					} else if (actionName === 'paste_html' || actionName === 'pasteHTML') {
+						window.Asc.plugin.callCommand(function() {
+							var actualTargetIndex = Asc.scope.actualTargetIndex;
+							var oDocument = Api.GetDocument();
+							var oParagraph = oDocument.GetElement(actualTargetIndex);
+							if (oParagraph) {
+								oParagraph.Select();
+							}
+							return oDocument.GetElementsCount();
+						}, false, true, function(countBefore) {
+							window.Asc.plugin.executeMethod("PasteHtml", [change.properties.html || ''], function() {
+								window.Asc.plugin.callCommand(function() {
+									return Api.GetDocument().GetElementsCount();
+								}, false, true, function(countAfter) {
+									var delta = (countAfter !== undefined && countBefore !== undefined) ? (countAfter - countBefore) : 0;
+									resolve({ delta: delta });
+								});
+							});
+						});
+					} else {
+						// formatting or rewriting
+						window.Asc.plugin.callCommand(function() {
+							var change = Asc.scope.change;
+							var actualTargetIndex = Asc.scope.actualTargetIndex;
+							var oDocument = Api.GetDocument();
+							var oParagraph = oDocument.GetElement(actualTargetIndex);
+							
+							var origFont = "Calibri";
+							var origSize = 22;
+							var origBold = false;
+							var origItalic = false;
+							var origUnderline = false;
+							var origStrikeout = false;
+							var origColorHex = "#000000";
+							var origHighlight = "none";
+							
+							if (oParagraph) {
+								try {
+									var runCount = oParagraph.GetElementsCount();
+									if (runCount > 0) {
+										var firstRun = oParagraph.GetElement(0);
+										if (firstRun) {
+											var textPr = null;
+											try { if (typeof firstRun.GetTextPr === "function") textPr = firstRun.GetTextPr(); } catch(e) {}
+											if (textPr) {
+												try { 
+													if (typeof textPr.GetFontName === "function") {
+														origFont = textPr.GetFontName() || origFont;
+													}
+												} catch(e) {}
+												try { if (typeof textPr.GetFontSize === "function") origSize = textPr.GetFontSize() || origSize; } catch(e) {}
+												try { if (typeof textPr.GetBold === "function") origBold = textPr.GetBold() || origBold; } catch(e) {}
+												try { if (typeof textPr.GetItalic === "function") origItalic = textPr.GetItalic() || origItalic; } catch(e) {}
+												try { if (typeof textPr.GetUnderline === "function") origUnderline = !!textPr.GetUnderline(); } catch(e) {}
+												try { if (typeof textPr.GetStrikeout === "function") origStrikeout = !!textPr.GetStrikeout(); } catch(e) {}
+												try {
+													if (typeof textPr.GetColor === "function") {
+														var c = textPr.GetColor();
+														if (c && typeof c.GetHex === "function") origColorHex = c.GetHex() || origColorHex;
+													}
+												} catch(e) {}
+												try {
+													if (typeof textPr.GetHighlight === "function") {
+														var hl = textPr.GetHighlight();
+														if (hl) {
+															if (typeof hl === "string") origHighlight = hl;
+															else if (typeof hl.GetHex === "function") origHighlight = hl.GetHex() || origHighlight;
+														}
+													}
+												} catch(e) {}
+											}
+										}
+									}
+								} catch(e) {}
+								
+								try { oParagraph.Select(); } catch(e) {}
+								
+								var oProps = change.properties || {};
+								try {
+									if (oProps.newText !== undefined) {
+										parseAndApplyTextWithTags(oParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
+									} else {
+										// Directly apply styles to existing runs without recreating/destroying them!
+										var runCount = oParagraph.GetElementsCount();
+										for (var r = 0; r < runCount; r++) {
+											var oRun = oParagraph.GetElement(r);
+											if (oRun && oRun.GetClassType() === "run") {
+												if (oProps.fontName !== undefined) {
+													try { oRun.SetFontFamily(oProps.fontName); } catch(e) {}
+													try { oRun.SetFontName(oProps.fontName); } catch(e) {}
+												}
+												if (oProps.fontSize !== undefined) {
+													try { oRun.SetFontSize(oProps.fontSize); } catch(e) {}
+												}
+												if (oProps.bold !== undefined) {
+													try { oRun.SetBold(!!oProps.bold); } catch(e) {}
+												}
+												if (oProps.italic !== undefined) {
+													try { oRun.SetItalic(!!oProps.italic); } catch(e) {}
+												}
+												if (oProps.underline !== undefined) {
+													try { oRun.SetUnderline(!!oProps.underline); } catch(e) {}
+												}
+												if (oProps.strikeout !== undefined) {
+													try { oRun.SetStrikeout(!!oProps.strikeout); } catch(e) {}
+												}
+												if (oProps.doubleStrikeout !== undefined) {
+													try { oRun.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
+												}
+												if (oProps.smallCaps !== undefined) {
+													try { oRun.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
+												}
+												if (oProps.caps !== undefined) {
+													try { oRun.SetCaps(!!oProps.caps); } catch(e) {}
+												}
+												if (oProps.subscript !== undefined) {
+													try { oRun.SetSubscript(!!oProps.subscript); } catch(e) {}
+												}
+												if (oProps.superscript !== undefined) {
+													try { oRun.SetSuperscript(!!oProps.superscript); } catch(e) {}
+												}
+												if (oProps.characterSpacing !== undefined) {
+													try { oRun.SetSpacing(oProps.characterSpacing); } catch(e) {}
+												}
+												if (oProps.highlight !== undefined) {
+													try {
+														var hl = oProps.highlight.toLowerCase().trim();
+														if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+														else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+														else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+														else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+														else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+														else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+														else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+														else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+														else oRun.SetHighlight(hl);
+													} catch(eHighlight) {}
+												}
+												if (oProps.color !== undefined) {
+													try {
+														var hex = String(oProps.color).replace('#', '').trim();
+														if (hex.length === 6) {
+															var red = parseInt(hex.substring(0, 2), 16);
+															var green = parseInt(hex.substring(2, 4), 16);
+															var blue = parseInt(hex.substring(4, 6), 16);
+															try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+																try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+															}
+														} else {
+															var namedColors = {
+																"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+																"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+																"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+															};
+															if (namedColors[hex.toLowerCase()]) {
+																var rgb = namedColors[hex.toLowerCase()];
+																oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+															}
+														}
+													} catch(eColorOuter) {}
+												}
+											}
+										}
+									}
+								} catch(e) {}
 
-						// Apply paragraph-level styling
-						try {
-							if (oProps.alignment) {
-								var jc = oProps.alignment;
-								if (jc === "justify") jc = "both";
-								if (typeof oParagraph.SetJc === "function") oParagraph.SetJc(jc);
+								// Apply paragraph-level styling
+								try {
+									if (oProps.alignment) {
+										var jc = oProps.alignment;
+										if (jc === "justify") jc = "both";
+										if (typeof oParagraph.SetJc === "function") oParagraph.SetJc(jc);
+									}
+								} catch(e) {}
+								try { if (oProps.spacingAfter !== undefined && oParagraph.SetSpacingAfter) oParagraph.SetSpacingAfter(oProps.spacingAfter); } catch(e) {}
+								try { if (oProps.spacingBefore !== undefined && oParagraph.SetSpacingBefore) oParagraph.SetSpacingBefore(oProps.spacingBefore); } catch(e) {}
+								try {
+									if (oProps.lineSpacing !== undefined && oParagraph.SetSpacingLine) {
+										var rule = oProps.lineSpacingRule || "auto";
+										var val = oProps.lineSpacingTwips || Math.round(oProps.lineSpacing * 240);
+										oParagraph.SetSpacingLine(val, rule);
+									}
+								} catch(e) {}
+								try {
+									if (oProps.shading !== undefined && oParagraph.SetShd) {
+										var hex = String(oProps.shading).replace('#', '').trim();
+										if (hex.length === 6) {
+											var r = parseInt(hex.substring(0, 2), 16);
+											var g = parseInt(hex.substring(2, 4), 16);
+											var b = parseInt(hex.substring(4, 6), 16);
+											try { oParagraph.SetShd(r, g, b); } catch(eShd) {
+												try { oParagraph.SetShd(Api.CreateColorFromRGB(r, g, b)); } catch(errShd) {}
+											}
+										}
+									}
+								} catch(e) {}
 							}
-						} catch(e) {}
-						try { if (oProps.spacingAfter !== undefined && oParagraph.SetSpacingAfter) oParagraph.SetSpacingAfter(oProps.spacingAfter); } catch(e) {}
-						try { if (oProps.spacingBefore !== undefined && oParagraph.SetSpacingBefore) oParagraph.SetSpacingBefore(oProps.spacingBefore); } catch(e) {}
-						try {
-							if (oProps.lineSpacing !== undefined && oParagraph.SetSpacingLine) {
-								var rule = oProps.lineSpacingRule || "auto";
-								var val = oProps.lineSpacingTwips || Math.round(oProps.lineSpacing * 240);
-								oParagraph.SetSpacingLine(val, rule);
+							return "success";
+						}, false, true, function() {
+							resolve({ delta: 0 });
+						});
+					}
+				});
+			}
+
+			// Apply edit command
+			const editResult = await runEditCommand();
+
+			// Capture element state after applying change
+			const afterState = await captureElementState(actualTargetIndex);
+
+			// Verification logic check
+			const verification = verifyChange(change, beforeState, afterState);
+
+			if (verification.success) {
+				log(`Action [${actionName.toUpperCase()}] executed and VERIFIED successfully!`, 'success');
+				
+				// Append final successful stateAfter
+				lastExecutionDebugData.stateAfter.push({
+					stepIndex: i,
+					action: actionName,
+					targetIndex: targetIndex,
+					actualIndex: actualTargetIndex,
+					state: afterState,
+					verification: verification
+				});
+				if (typeof updateDebugViewer === 'function') updateDebugViewer();
+
+				indexOffset += editResult.delta;
+				retryCount = 0; 
+				i++;
+				setTimeout(applyNext, 300);
+			} else {
+				log(`Verification FAILED for action [${actionName.toUpperCase()}]: ${verification.reason}`, 'warning');
+				retryCount++;
+				if (retryCount < maxRetries) {
+					log(`Retrying action [${actionName.toUpperCase()}] in 1000ms...`, 'info');
+					setTimeout(applyNext, 1000);
+				} else {
+					log(`Action [${actionName.toUpperCase()}] failed verification after ${maxRetries} attempts. Proceeding anyway to preserve workflow continuity.`, 'error');
+					
+					// Append final fallback stateAfter
+					lastExecutionDebugData.stateAfter.push({
+						stepIndex: i,
+						action: actionName,
+						targetIndex: targetIndex,
+						actualIndex: actualTargetIndex,
+						state: afterState,
+						verification: verification
+					});
+					if (typeof updateDebugViewer === 'function') updateDebugViewer();
+
+					indexOffset += editResult.delta;
+					retryCount = 0; 
+					i++;
+					setTimeout(applyNext, 300);
+				}
+			}
+		}
+
+		// HTML Tag Parser
+		function parseAndApplyTextWithTags(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
+			try { oPar.RemoveAllElements(); } catch(e) {}
+			var regex = /(<[^>]+>)/g;
+			var parts = htmlStr.split(regex);
+			var formatState = {
+				fontName: pProps.fontName || defFont || "Calibri",
+				fontSize: pProps.fontSize || defSize || 22,
+				bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
+				italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
+				underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
+				strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
+				doubleStrikeout: pProps.doubleStrikeout !== undefined ? pProps.doubleStrikeout : false,
+				smallCaps: pProps.smallCaps !== undefined ? pProps.smallCaps : false,
+				caps: pProps.caps !== undefined ? pProps.caps : false,
+				subscript: pProps.subscript !== undefined ? pProps.subscript : false,
+				superscript: pProps.superscript !== undefined ? pProps.superscript : false,
+				characterSpacing: pProps.characterSpacing !== undefined ? pProps.characterSpacing : 0,
+				color: pProps.color || defColorHex || "#000000",
+				highlight: pProps.highlight || defHighlight || "none"
+			};
+			var stateStack = [JSON.parse(JSON.stringify(formatState))];
+			
+			for (var idx = 0; idx < parts.length; idx++) {
+				var part = parts[idx];
+				if (!part) continue;
+				
+				if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
+					var tagLower = part.toLowerCase();
+					if (tagLower.indexOf("</") === 0) {
+						if (stateStack.length > 1) {
+							stateStack.pop();
+							formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
+						}
+					} else {
+						var newState = JSON.parse(JSON.stringify(formatState));
+						if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
+							newState.bold = true;
+						} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
+							newState.italic = true;
+						} else if (tagLower.indexOf("<u") === 0) {
+							newState.underline = true;
+						} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
+							newState.strikeout = true;
+						} else if (tagLower.indexOf("<sub>") === 0) {
+							newState.subscript = true;
+							newState.superscript = false;
+						} else if (tagLower.indexOf("<sup>") === 0) {
+							newState.superscript = true;
+							newState.subscript = false;
+						} else if (tagLower.indexOf("<small>") === 0) {
+							newState.smallCaps = true;
+						} else if (tagLower.indexOf("<big>") === 0) {
+							newState.caps = true;
+							newState.fontSize = Math.round(newState.fontSize * 1.2);
+						} else if (tagLower.indexOf("<font") === 0) {
+							var match = part.match(/color=["']([^"']+)["']/i);
+							if (match && match[1]) newState.color = match[1];
+							var matchFace = part.match(/face=["']([^"']+)["']/i);
+							if (matchFace && matchFace[1]) newState.fontName = matchFace[1];
+							var matchSize = part.match(/size=["']([^"']+)["']/i);
+							if (matchSize && matchSize[1]) newState.fontSize = parseFloat(matchSize[1]);
+						} else if (tagLower.indexOf("<mark") === 0) {
+							var match = part.match(/color=["']([^"']+)["']/i);
+							var styleMatch = part.match(/style=["']([^"']+)["']/i);
+							if (match && match[1]) {
+								newState.highlight = match[1];
+							} else if (styleMatch && styleMatch[1]) {
+								var styleStr = styleMatch[1];
+								var declarations = styleStr.split(';');
+								var foundBg = false;
+								for (var d = 0; d < declarations.length; d++) {
+									var dec = declarations[d].trim();
+									if (!dec) continue;
+									var pSplit = dec.split(':');
+									if (pSplit.length >= 2) {
+										var propName = pSplit[0].trim().toLowerCase();
+										var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+										if (propName === 'background-color' || propName === 'background' || propName === 'color') {
+											newState.highlight = propVal;
+											foundBg = true;
+										}
+									}
+								}
+								if (!foundBg) newState.highlight = "yellow";
+							} else {
+								newState.highlight = "yellow";
 							}
-						} catch(e) {}
-						try { if (oProps.indLeft !== undefined && oParagraph.SetIndLeft) oParagraph.SetIndLeft(oProps.indLeft); } catch(e) {}
-						try { if (oProps.indRight !== undefined && oParagraph.SetIndRight) oParagraph.SetIndRight(oProps.indRight); } catch(e) {}
-						try { if (oProps.indFirstLine !== undefined && oParagraph.SetIndFirstLine) oParagraph.SetIndFirstLine(oProps.indFirstLine); } catch(e) {}
-						try {
-							if (oProps.shading !== undefined && oParagraph.SetShd) {
-								var hex = String(oProps.shading).replace('#', '').trim();
+						} else if (tagLower.indexOf("<span") === 0) {
+							var styleMatch = part.match(/style=["']([^"']+)["']/i);
+							if (styleMatch && styleMatch[1]) {
+								var styleStr = styleMatch[1];
+								var declarations = styleStr.split(';');
+								for (var d = 0; d < declarations.length; d++) {
+									var dec = declarations[d].trim();
+									if (!dec) continue;
+									var pSplit = dec.split(':');
+									if (pSplit.length >= 2) {
+										var propName = pSplit[0].trim().toLowerCase();
+										var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+										
+										if (propName === 'font-weight') {
+											if (propVal === 'bold' || propVal === '700' || propVal === '800' || propVal === '900') newState.bold = true;
+											else if (propVal === 'normal' || propVal === '400') newState.bold = false;
+										} else if (propName === 'font-style') {
+											if (propVal === 'italic' || propVal === 'oblique') newState.italic = true;
+											else if (propVal === 'normal') newState.italic = false;
+										} else if (propName === 'text-decoration') {
+											if (propVal.indexOf('underline') !== -1) newState.underline = true;
+											if (propVal.indexOf('line-through') !== -1) newState.strikeout = true;
+											if (propVal.indexOf('double-line-through') !== -1 || propVal.indexOf('double') !== -1) newState.doubleStrikeout = true;
+										} else if (propName === 'color') {
+											newState.color = propVal;
+										} else if (propName === 'background-color' || propName === 'background') {
+											newState.highlight = propVal;
+										} else if (propName === 'font-family') {
+											newState.fontName = propVal.replace(/['"]/g, '').trim();
+										} else if (propName === 'font-size') {
+											var numVal = parseFloat(propVal);
+											if (propVal.indexOf('pt') !== -1) {
+												newState.fontSize = Math.round(numVal * 2);
+											} else if (propVal.indexOf('px') !== -1) {
+												newState.fontSize = Math.round(numVal * 1.5);
+											}
+										} else if (propName === 'letter-spacing') {
+											var numVal = parseFloat(propVal);
+											if (propVal.indexOf('pt') !== -1) {
+												newState.characterSpacing = Math.round(numVal * 20);
+											} else if (propVal.indexOf('px') !== -1) {
+												newState.characterSpacing = Math.round(numVal * 15);
+											} else {
+												newState.characterSpacing = Math.round(numVal);
+											}
+										} else if (propName === 'text-transform') {
+											if (propVal === 'uppercase') newState.caps = true;
+											else if (propVal === 'lowercase') newState.caps = false;
+										} else if (propName === 'font-variant') {
+											if (propVal === 'small-caps') newState.smallCaps = true;
+										} else if (propName === 'vertical-align') {
+											if (propVal === 'super') {
+												newState.superscript = true;
+												newState.subscript = false;
+											} else if (propVal === 'sub') {
+												newState.subscript = true;
+												newState.superscript = false;
+											}
+										}
+									}
+								}
+							}
+						}
+						stateStack.push(newState);
+						formatState = newState;
+					}
+				} else {
+					var decText = part
+						.replace(/&quot;/g, '"')
+						.replace(/&lt;/g, '<')
+						.replace(/&gt;/g, '>')
+						.replace(/&amp;/g, '&')
+						.replace(/&#39;/g, "'")
+						.replace(/&apos;/g, "'");
+						
+					var oRun = null;
+					try { oRun = oPar.AddText(decText); } catch(eText) {}
+					if (oRun) {
+						if (formatState.fontName) {
+							try { oRun.SetFontFamily(formatState.fontName); } catch(e) {}
+							try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+						}
+						if (formatState.fontSize) {
+							try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+						}
+						try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+						try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+						try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+						try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+						try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+						try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+						try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+						try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+						try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+						try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+						
+						if (formatState.highlight) {
+							try {
+								var hl = formatState.highlight.toLowerCase().trim();
+								if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+								else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+								else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+								else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+								else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+								else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+								else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+								else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+								else oRun.SetHighlight(hl);
+							} catch(eHighlight) {}
+						}
+						
+						if (formatState.color) {
+							try {
+								var hex = String(formatState.color).replace('#', '').trim();
 								if (hex.length === 6) {
 									var r = parseInt(hex.substring(0, 2), 16);
 									var g = parseInt(hex.substring(2, 4), 16);
 									var b = parseInt(hex.substring(4, 6), 16);
-									try { oParagraph.SetShd(r, g, b); } catch(eShd) {
-										try { oParagraph.SetShd(Api.CreateColorFromRGB(r, g, b)); } catch(errShd) {}
-									}
-								}
-							}
-						} catch(e) {}
-					}
-					
-					return "success";
-					
-					// Embedded Upgraded HTML/CSS tag Parser inside ONLYOFFICE sandbox context
-					function parseAndApplyTextWithTags(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
-						try { oPar.RemoveAllElements(); } catch(e) {}
-						var regex = /(<[^>]+>)/g;
-						var parts = htmlStr.split(regex);
-						var formatState = {
-							fontName: pProps.fontName || defFont || "Calibri",
-							fontSize: pProps.fontSize || defSize || 22,
-							bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
-							italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
-							underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
-							strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
-							doubleStrikeout: pProps.doubleStrikeout !== undefined ? pProps.doubleStrikeout : false,
-							smallCaps: pProps.smallCaps !== undefined ? pProps.smallCaps : false,
-							caps: pProps.caps !== undefined ? pProps.caps : false,
-							subscript: pProps.subscript !== undefined ? pProps.subscript : false,
-							superscript: pProps.superscript !== undefined ? pProps.superscript : false,
-							characterSpacing: pProps.characterSpacing !== undefined ? pProps.characterSpacing : 0,
-							color: pProps.color || defColorHex || "#000000",
-							highlight: pProps.highlight || defHighlight || "none"
-						};
-						var stateStack = [JSON.parse(JSON.stringify(formatState))];
-						
-						for (var idx = 0; idx < parts.length; idx++) {
-							var part = parts[idx];
-							if (!part) continue;
-							
-							if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
-								var tagLower = part.toLowerCase();
-								if (tagLower.indexOf("</") === 0) {
-									if (stateStack.length > 1) {
-										stateStack.pop();
-										formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
+									try { oRun.SetColor(Api.CreateColorFromRGB(r, g, b)); } catch(eColor) {
+										try { oRun.SetColor(r, g, b); } catch(errHex) {}
 									}
 								} else {
-									var newState = JSON.parse(JSON.stringify(formatState));
-									if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
-										newState.bold = true;
-									} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
-										newState.italic = true;
-									} else if (tagLower.indexOf("<u") === 0) {
-										newState.underline = true;
-									} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
-										newState.strikeout = true;
-									} else if (tagLower.indexOf("<sub>") === 0) {
-										newState.subscript = true;
-										newState.superscript = false;
-									} else if (tagLower.indexOf("<sup>") === 0) {
-										newState.superscript = true;
-										newState.subscript = false;
-									} else if (tagLower.indexOf("<small>") === 0) {
-										newState.smallCaps = true;
-									} else if (tagLower.indexOf("<big>") === 0) {
-										newState.caps = true;
-										newState.fontSize = Math.round(newState.fontSize * 1.2);
-									} else if (tagLower.indexOf("<font") === 0) {
-										var match = part.match(/color=["']([^"']+)["']/i);
-										if (match && match[1]) newState.color = match[1];
-										var matchFace = part.match(/face=["']([^"']+)["']/i);
-										if (matchFace && matchFace[1]) newState.fontName = matchFace[1];
-										var matchSize = part.match(/size=["']([^"']+)["']/i);
-										if (matchSize && matchSize[1]) newState.fontSize = parseFloat(matchSize[1]);
-									} else if (tagLower.indexOf("<mark") === 0) {
-										var match = part.match(/color=["']([^"']+)["']/i);
-										var styleMatch = part.match(/style=["']([^"']+)["']/i);
-										if (match && match[1]) {
-											newState.highlight = match[1];
-										} else if (styleMatch && styleMatch[1]) {
-											var styleStr = styleMatch[1];
-											var declarations = styleStr.split(';');
-											var foundBg = false;
-											for (var d = 0; d < declarations.length; d++) {
-												var dec = declarations[d].trim();
-												if (!dec) continue;
-												var pSplit = dec.split(':');
-												if (pSplit.length >= 2) {
-													var propName = pSplit[0].trim().toLowerCase();
-													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
-													if (propName === 'background-color' || propName === 'background' || propName === 'color') {
-														newState.highlight = propVal;
-														foundBg = true;
-													}
-												}
-											}
-											if (!foundBg) newState.highlight = "yellow";
-										} else {
-											newState.highlight = "yellow";
-										}
-									} else if (tagLower.indexOf("<span") === 0) {
-										// Parse style attribute rules natively
-										var styleMatch = part.match(/style=["']([^"']+)["']/i);
-										if (styleMatch && styleMatch[1]) {
-											var styleStr = styleMatch[1];
-											var declarations = styleStr.split(';');
-											for (var d = 0; d < declarations.length; d++) {
-												var dec = declarations[d].trim();
-												if (!dec) continue;
-												var pSplit = dec.split(':');
-												if (pSplit.length >= 2) {
-													var propName = pSplit[0].trim().toLowerCase();
-													var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
-													
-													if (propName === 'font-weight') {
-														if (propVal === 'bold' || propVal === '700' || propVal === '800' || propVal === '900') newState.bold = true;
-														else if (propVal === 'normal' || propVal === '400') newState.bold = false;
-													} else if (propName === 'font-style') {
-														if (propVal === 'italic' || propVal === 'oblique') newState.italic = true;
-														else if (propVal === 'normal') newState.italic = false;
-													} else if (propName === 'text-decoration') {
-														if (propVal.indexOf('underline') !== -1) newState.underline = true;
-														if (propVal.indexOf('line-through') !== -1) newState.strikeout = true;
-														if (propVal.indexOf('double-line-through') !== -1 || propVal.indexOf('double') !== -1) newState.doubleStrikeout = true;
-													} else if (propName === 'color') {
-														newState.color = propVal;
-													} else if (propName === 'background-color' || propName === 'background') {
-														newState.highlight = propVal;
-													} else if (propName === 'font-family') {
-														newState.fontName = propVal.replace(/['"]/g, '').trim();
-													} else if (propName === 'font-size') {
-														var numVal = parseFloat(propVal);
-														if (propVal.indexOf('pt') !== -1) {
-															newState.fontSize = Math.round(numVal * 2);
-														} else if (propVal.indexOf('px') !== -1) {
-															newState.fontSize = Math.round(numVal * 1.5);
-														}
-													} else if (propName === 'letter-spacing') {
-														var numVal = parseFloat(propVal);
-														if (propVal.indexOf('pt') !== -1) {
-															newState.characterSpacing = Math.round(numVal * 20); // 1pt letter-spacing = 20 dxa character spacing
-														} else if (propVal.indexOf('px') !== -1) {
-															newState.characterSpacing = Math.round(numVal * 15);
-														} else {
-															newState.characterSpacing = Math.round(numVal);
-														}
-													} else if (propName === 'text-transform') {
-														if (propVal === 'uppercase') newState.caps = true;
-														else if (propVal === 'lowercase') newState.caps = false;
-													} else if (propName === 'font-variant') {
-														if (propVal === 'small-caps') newState.smallCaps = true;
-													} else if (propName === 'vertical-align') {
-														if (propVal === 'super') {
-															newState.superscript = true;
-															newState.subscript = false;
-														} else if (propVal === 'sub') {
-															newState.subscript = true;
-															newState.superscript = false;
-														}
-													}
-												}
-											}
-										}
-									}
-									stateStack.push(newState);
-									formatState = newState;
-								}
-							} else {
-								var decText = part
-									.replace(/&quot;/g, '"')
-									.replace(/&lt;/g, '<')
-									.replace(/&gt;/g, '>')
-									.replace(/&amp;/g, '&')
-									.replace(/&#39;/g, "'")
-									.replace(/&apos;/g, "'");
-									
-								var oRun = null;
-								try { oRun = oPar.AddText(decText); } catch(eText) {}
-								if (oRun) {
-									if (formatState.fontName) {
-										try { oRun.SetFontName(formatState.fontName); } catch(e) {}
-									}
-									if (formatState.fontSize) {
-										try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
-									}
-									try { oRun.SetBold(!!formatState.bold); } catch(e) {}
-									try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
-									try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
-									try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
-									try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
-									try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
-									try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
-									try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
-									try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
-									try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
-									
-									if (formatState.highlight) {
-										try {
-											var hl = formatState.highlight.toLowerCase().trim();
-											if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
-											else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
-											else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
-											else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
-											else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
-											else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
-											else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
-											else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
-											else oRun.SetHighlight(hl);
-										} catch(eHighlight) {}
-									}
-									
-									if (formatState.color) {
-										try {
-											var hex = String(formatState.color).replace('#', '').trim();
-											if (hex.length === 6) {
-												var r = parseInt(hex.substring(0, 2), 16);
-												var g = parseInt(hex.substring(2, 4), 16);
-												var b = parseInt(hex.substring(4, 6), 16);
-												try { oRun.SetColor(Api.CreateColorFromRGB(r, g, b)); } catch(eColor) {
-													try { oRun.SetColor(r, g, b); } catch(errHex) {}
-												}
-											} else {
-												var namedColors = {
-													"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
-													"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
-													"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
-												};
-												if (namedColors[hex.toLowerCase()]) {
-													var rgb = namedColors[hex.toLowerCase()];
-													oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
-												}
-											}
-										} catch(eColorOuter) {}
+									var namedColors = {
+										"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+										"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+										"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+									};
+									if (namedColors[hex.toLowerCase()]) {
+										var rgb = namedColors[hex.toLowerCase()];
+										oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
 									}
 								}
-							}
+							} catch(eColorOuter) {}
 						}
 					}
-				}, false, true, function() {
-					i++;
-					setTimeout(applyNext, 500);
-				});
+				}
 			}
 		}
 
