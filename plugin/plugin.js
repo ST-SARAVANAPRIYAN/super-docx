@@ -194,16 +194,16 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			instructions: "1. Translate the text into the target language with perfect grammatical accuracy.\n2. Keep paragraph structure identical. Do not alter styling.\n3. Return a 'rewrite' action for the paragraph indices."
 		},
 		format: {
-			instructions: "1. Focus ONLY on styling (fontName, fontSize, bold, italic, color, alignment, spacing, shading).\n2. Do NOT rewrite the text content of the paragraphs unless explicitly requested to fix text.\n3. Return 'change_font', 'change_color', or 'modifyStyle' high-level actions."
+			instructions: "1. Focus ONLY on styling (fontName, fontSize, bold, italic, color, alignment, spacing, shading, lists, and indentation).\n2. Do NOT rewrite the text content of the paragraphs unless explicitly requested.\n3. Return 'change_font', 'change_color', 'make_list', 'change_indent', or 'table_action' high-level actions depending on styling or layout goals."
 		},
 		create_document: {
 			instructions: "1. Generate a beautifully structured document, essay, report, or article using professional formatting rules.\n2. Heavily use 'paste_html' action with high-fidelity styled HTML strings.\n3. Create proper heading hierarchies (<h1 style='...'>, <h2 style='...'>, <p style='text-align:justify;'>)."
 		},
 		insert_content: {
-			instructions: "1. Insert new paragraphs or tables at the correct target index.\n2. Return 'create_paragraph' or 'paste_html' high-level actions with proper texts/styles."
+			instructions: "1. Insert new paragraphs or tables at the correct target index.\n2. Return 'create_paragraph', 'paste_html', or 'table_action' (subAction: 'create', 'add_row', 'add_column') high-level actions with proper text or parameters."
 		},
 		delete_content: {
-			instructions: "1. Remove targeted content, paragraphs, tables, or sections.\n2. Return 'delete_paragraph' high-level actions."
+			instructions: "1. Remove targeted content, paragraphs, tables, or sections.\n2. Return 'delete_paragraph' or 'table_action' (subAction: 'delete_row', 'delete_column') high-level actions."
 		},
 		restructure: {
 			instructions: "1. Reorganize headings, change layouts or margins.\n2. Return correct sequence of high-level actions (delete, create, format) to achieve structure."
@@ -990,13 +990,14 @@ Every plan action must follow this exact structure:
 {
   "plans": [
     {
-      "action": "rewrite" | "change_font" | "change_color" | "create_paragraph" | "delete_paragraph" | "paste_html",
-      "targetIndex": 5,
+      "action": "rewrite" | "change_font" | "change_color" | "create_paragraph" | "delete_paragraph" | "paste_html" | "make_list" | "change_indent" | "table_action",
+      "targetIndex": 5, // index of target paragraph or table
+      "subAction": "create" | "add_row" | "add_column" | "delete_row" | "delete_column" | "merge_cells" | "cell_shading", // ONLY for "table_action"
       "properties": {
         "newText": "Rewritten or newly created plain text here...",
         "html": "<p style='font-family:Arial;font-size:12pt;'>Styled HTML content for paste_html...</p>",
         "fontName": "Georgia",
-        "fontSize": 12, // in standard points (e.g., 12 for 12pt, 19.5 for 19.5pt)
+        "fontSize": 12, // in standard points (e.g., 12 for 12pt)
         "bold": true,
         "italic": false,
         "underline": true,
@@ -1008,7 +1009,27 @@ Every plan action must follow this exact structure:
         "spacingBefore": 120, // in dxa
         "spacingAfter": 120, // in dxa
         "lineSpacing": 1.15,
-        "shading": "#f3f4f6"
+        "shading": "#f3f4f6",
+        
+        // List styling properties (ONLY for make_list):
+        "listType": "bullet" | "numbered",
+        "style": "bullet" | "decimal" | "lowerRoman" | "upperRoman" | "lowerLetter" | "upperLetter",
+        "level": 0, // nesting level 0 to 8
+        "formatString": "•" | "%1." | "%1)" | "%1.%2.",
+        
+        // Indentation properties (ONLY for change_indent):
+        "indLeft": 720, // in dxa/twips (1440 = 1 inch, 720 = 0.5 inch)
+        "indRight": 720,
+        "indFirstLine": 360,
+        
+        // Table properties (ONLY for table_action):
+        "rows": 3, // for subAction 'create'
+        "cols": 3, // for subAction 'create'
+        "rowIndex": 0, // for add_row or delete_row
+        "colIndex": 0, // for delete_column
+        "before": true, // for add_row
+        "cells": [[0, 0], [0, 1]], // coordinates [row, col] for merge_cells or cell_shading
+        "color": "#eff6ff" // shading color for cell_shading
       }
     }
   ]
@@ -1141,6 +1162,12 @@ User Request:
 				return { success: true };
 			}
 			return { success: false, reason: "No new content detected after HTML paste" };
+		}
+
+		if (actionName === 'make_list' || actionName === 'makeList' ||
+		    actionName === 'change_indent' || actionName === 'changeIndent' ||
+		    actionName === 'table_action' || actionName === 'tableAction') {
+			return { success: true };
 		}
 
 		if (afterState) {
@@ -1909,7 +1936,7 @@ User Request:
 									currentSection.elements.push(elementJSON);
 								}
 								
-							} else if (type === "table" && targetMode === "full") {
+							} else if (type === "table" && (targetMode === "full" || targetMode === "medium")) {
 								var tableJSON = {
 									type: "table",
 									index: i,
@@ -2477,6 +2504,124 @@ User Request:
 								});
 							});
 						});
+					} else if (actionName === 'make_list' || actionName === 'makeList') {
+						window.Asc.plugin.callCommand(function() {
+							var change = Asc.scope.change;
+							var actualTargetIndex = Asc.scope.actualTargetIndex;
+							var oProps = change.properties || {};
+							var oDocument = Api.GetDocument();
+							var oParagraph = oDocument.GetElement(actualTargetIndex);
+							if (oParagraph && oParagraph.GetClassType() === "paragraph") {
+								var listType = oProps.listType === "bullet" ? "bulleted" : "numbered";
+								var oNumbering = oDocument.CreateNumbering(listType);
+								if (oNumbering) {
+									var level = oProps.level !== undefined ? Number(oProps.level) : 0;
+									var oLevel = oNumbering.GetLevel(level);
+									if (oLevel) {
+										var style = oProps.style || (oProps.listType === "bullet" ? "bullet" : "decimal");
+										var formatString = oProps.formatString || (oProps.listType === "bullet" ? "•" : "%1.");
+										oLevel.SetCustomType(style, formatString, "left");
+										oParagraph.SetNumbering(oLevel);
+									}
+								}
+							}
+							return true;
+						}, false, true, function() {
+							resolve({ delta: 0 });
+						});
+					} else if (actionName === 'table_action' || actionName === 'tableAction') {
+						window.Asc.plugin.callCommand(function() {
+							var change = Asc.scope.change;
+							var actualTargetIndex = Asc.scope.actualTargetIndex;
+							var oProps = change.properties || {};
+							var subAction = change.subAction || oProps.subAction;
+							var oDocument = Api.GetDocument();
+							
+							if (subAction === 'create') {
+								var rows = Number(oProps.rows || 2);
+								var cols = Number(oProps.cols || 2);
+								var oTable = Api.CreateTable(cols, rows);
+								if (oTable) {
+									oDocument.AddElement(actualTargetIndex + 1, oTable);
+									return { delta: 1 };
+								}
+								return { delta: 0 };
+							}
+							
+							var oTable = oDocument.GetElement(actualTargetIndex);
+							if (oTable && oTable.GetClassType() === "table") {
+								if (subAction === 'add_row' || subAction === 'addRow') {
+									var rowIndex = oProps.rowIndex !== undefined ? Number(oProps.rowIndex) : oTable.GetRowsCount() - 1;
+									var before = !!oProps.before;
+									var refRow = oTable.GetRow(rowIndex);
+									if (refRow) {
+										var refCell = refRow.GetCell(0);
+										if (refCell) oTable.AddRow(refCell, before);
+									} else {
+										oTable.AddRow();
+									}
+								} else if (subAction === 'add_column' || subAction === 'addColumn') {
+									oTable.AddColumn();
+								} else if (subAction === 'delete_row' || subAction === 'deleteRow') {
+									var rowIndex = Number(oProps.rowIndex);
+									oTable.RemoveRow(rowIndex);
+								} else if (subAction === 'delete_column' || subAction === 'deleteColumn') {
+									var colIndex = Number(oProps.colIndex);
+									var oRow = oTable.GetRow(0);
+									if (oRow) {
+										var oCell = oRow.GetCell(colIndex);
+										if (oCell) oCell.RemoveColumn();
+									}
+								} else if (subAction === 'merge_cells' || subAction === 'mergeCells') {
+									var cellCoords = oProps.cells || [];
+									var cellObjects = [];
+									for (var k = 0; k < cellCoords.length; k++) {
+										var coords = cellCoords[k];
+										var cell = oTable.GetCell(coords[0], coords[1]);
+										if (cell) cellObjects.push(cell);
+									}
+									if (cellObjects.length > 1) {
+										oTable.MergeCells(cellObjects);
+									}
+								} else if (subAction === 'cell_shading' || subAction === 'cellShading') {
+									var cellCoords = oProps.cells || [];
+									var colorHex = oProps.color || "#ffffff";
+									for (var k = 0; k < cellCoords.length; k++) {
+										var coords = cellCoords[k];
+										var cell = oTable.GetCell(coords[0], coords[1]);
+										if (cell && typeof cell.SetBackgroundColor === 'function') {
+											cell.SetBackgroundColor(Api.HexColor(colorHex));
+										}
+									}
+								} else if (subAction === 'cell_borders' || subAction === 'cellBorders') {
+									var cellCoords = oProps.cells || [];
+									var style = oProps.borderStyle || "single";
+									var size = oProps.borderSize !== undefined ? Number(oProps.borderSize) : 8;
+									var colorHex = oProps.borderColor || "#000000";
+									var hex = String(colorHex).replace('#', '').trim();
+									var r = 0, g = 0, b = 0;
+									if (hex.length === 6) {
+										r = parseInt(hex.substring(0, 2), 16);
+										g = parseInt(hex.substring(2, 4), 16);
+										b = parseInt(hex.substring(4, 6), 16);
+									}
+									for (var k = 0; k < cellCoords.length; k++) {
+										var coords = cellCoords[k];
+										var cell = oTable.GetCell(coords[0], coords[1]);
+										if (cell) {
+											if (typeof cell.SetBorderBottom === 'function') cell.SetBorderBottom(style, size, 0, r, g, b);
+											if (typeof cell.SetBorderLeft === 'function') cell.SetBorderLeft(style, size, 0, r, g, b);
+											if (typeof cell.SetBorderRight === 'function') cell.SetBorderRight(style, size, 0, r, g, b);
+											if (typeof cell.SetBorderTop === 'function') cell.SetBorderTop(style, size, 0, r, g, b);
+										}
+									}
+								}
+							}
+							return { delta: 0 };
+						}, false, true, function(res) {
+							var d = res ? (res.delta || 0) : 0;
+							resolve({ delta: d });
+						});
 					} else {
 						// formatting or rewriting
 						window.Asc.plugin.callCommand(function() {
@@ -2632,6 +2777,20 @@ User Request:
 										if (typeof oParagraph.SetJc === "function") oParagraph.SetJc(jc);
 									}
 								} catch(e) {}
+								try {
+									var oParaPr = typeof oParagraph.GetParaPr === "function" ? oParagraph.GetParaPr() : null;
+									if (oParaPr) {
+										if (oProps.indLeft !== undefined && typeof oParaPr.SetIndLeft === "function") {
+											oParaPr.SetIndLeft(Number(oProps.indLeft));
+										}
+										if (oProps.indRight !== undefined && typeof oParaPr.SetIndRight === "function") {
+											oParaPr.SetIndRight(Number(oProps.indRight));
+										}
+										if (oProps.indFirstLine !== undefined && typeof oParaPr.SetIndFirstLine === "function") {
+											oParaPr.SetIndFirstLine(Number(oProps.indFirstLine));
+										}
+									}
+								} catch(eIndent) {}
 								try { if (oProps.spacingAfter !== undefined && oParagraph.SetSpacingAfter) oParagraph.SetSpacingAfter(oProps.spacingAfter); } catch(e) {}
 								try { if (oProps.spacingBefore !== undefined && oParagraph.SetSpacingBefore) oParagraph.SetSpacingBefore(oProps.spacingBefore); } catch(e) {}
 								try {
