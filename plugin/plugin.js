@@ -18,16 +18,6 @@
 	const saveKeyBtn = document.getElementById('save-key-btn');
 	const removeKeyBtn = document.getElementById('remove-key-btn');
 
-	// Provider & GitHub configuration elements
-	const providerGroqBtn = document.getElementById('provider-groq-btn');
-	const providerGithubBtn = document.getElementById('provider-github-btn');
-	const panelGroq = document.getElementById('panel-groq');
-	const panelGithub = document.getElementById('panel-github');
-	const githubTokenInput = document.getElementById('github-token');
-	const toggleGithubVisibility = document.getElementById('toggle-github-visibility');
-	const saveGithubBtn = document.getElementById('save-github-btn');
-	const removeGithubBtn = document.getElementById('remove-github-btn');
-	
 
 
 	const modelSelect = document.getElementById('model-select');
@@ -256,63 +246,26 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 	});
 
-	// GitHub Token Visibility Toggle
-	toggleGithubVisibility.addEventListener('click', () => {
-		if (githubTokenInput.type === 'password') {
-			githubTokenInput.type = 'text';
-			toggleGithubVisibility.innerText = '🙈';
-		} else {
-			githubTokenInput.type = 'password';
-			toggleGithubVisibility.innerText = '👁️';
-		}
-	});
-
-	// Available models for both providers with relative cost mappings
+	// Available models with relative cost mappings
 	const providerModels = {
 		groq: [
 			{ value: 'llama-3.3-70b-versatile', text: 'Llama 3.3 70B (Recommended) [0.5x cost]', cost: '0.5x' },
 			{ value: 'llama-3.1-8b-instant', text: 'Llama 3.1 8B (Fast) [0.05x cost]', cost: '0.05x' },
-			{ value: 'llama3-70b-8192', text: 'Llama 3 70B (Alternative) [0.5x cost]', cost: '0.5x' }
-		],
-		github: [
-			{ value: 'gpt-4o', text: 'GPT-4o (Flagship) [2.5x cost]', cost: '2.5x' },
-			{ value: 'gpt-4o-mini', text: 'GPT-4o Mini (Fast & Smart) [0.1x cost]', cost: '0.1x' },
-			{ value: 'meta-llama-3.1-70b-instruct', text: 'Llama 3.1 70B (Open Weight) [0.6x cost]', cost: '0.6x' },
-			{ value: 'meta-llama-3.1-405b-instruct', text: 'Llama 3.1 405B (Max Power) [3.0x cost]', cost: '3.0x' },
-			{ value: 'mistral-large-2407', text: 'Mistral Large (European Flagship) [2.0x cost]', cost: '2.0x' },
-			{ value: 'phi-3-medium-128k-instruct', text: 'Phi-3 Medium (Lightweight) [0.15x cost]', cost: '0.15x' }
+			{ value: 'llama-3.2-3b-preview', text: 'Llama 3.2 3B (Lightweight) [0.02x cost]', cost: '0.02x' },
+			{ value: 'llama-3.2-1b-preview', text: 'Llama 3.2 1B (Ultra-fast) [0.01x cost]', cost: '0.01x' },
+			{ value: 'deepseek-r1-distill-qwen-32b', text: 'DeepSeek R1 32B (Reasoning) [0.2x cost]', cost: '0.2x' },
+			{ value: 'deepseek-r1-distill-llama-70b', text: 'DeepSeek R1 70B (Reasoning) [0.5x cost]', cost: '0.5x' }
 		]
 	};
 
-	// Switch active provider
-	function switchProvider(provider) {
-		localStorage.setItem('super_editor_provider', provider);
+	// Initialize active provider select options
+	function initializeProvider() {
+		// Populate Groq models
+		modelSelect.innerHTML = providerModels.groq.map(m => `<option value="${m.value}">${m.text}</option>`).join('');
 		
-		if (provider === 'github') {
-			providerGithubBtn.classList.add('active');
-			providerGroqBtn.classList.remove('active');
-			panelGithub.style.display = 'block';
-			panelGroq.style.display = 'none';
-			
-			// Populate GitHub models
-			modelSelect.innerHTML = providerModels.github.map(m => `<option value="${m.value}">${m.text}</option>`).join('');
-			
-			const savedGithubModel = localStorage.getItem('github_models_model') || 'gpt-4o-mini';
-			modelSelect.value = savedGithubModel;
-			localStorage.setItem('github_models_model', savedGithubModel);
-		} else {
-			providerGroqBtn.classList.add('active');
-			providerGithubBtn.classList.remove('active');
-			panelGroq.style.display = 'block';
-			panelGithub.style.display = 'none';
-			
-			// Populate Groq models
-			modelSelect.innerHTML = providerModels.groq.map(m => `<option value="${m.value}">${m.text}</option>`).join('');
-			
-			const savedGroqModel = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
-			modelSelect.value = savedGroqModel;
-			localStorage.setItem('groq_copilot_model', savedGroqModel);
-		}
+		const savedGroqModel = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
+		modelSelect.value = savedGroqModel;
+		localStorage.setItem('groq_copilot_model', savedGroqModel);
 		
 		// Render dynamic cost indicator badge
 		updateCostBadge();
@@ -322,9 +275,8 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 	function updateCostBadge() {
 		if (!modelCostBadge || !modelSelect) return;
 		
-		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
 		const currentModel = modelSelect.value;
-		const models = providerModels[currentProvider];
+		const models = providerModels.groq;
 		const selectedModel = models.find(m => m.value === currentModel);
 		
 		if (selectedModel && selectedModel.cost) {
@@ -354,33 +306,16 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 	}
 
-	// Service provider switch listeners
-	providerGroqBtn.addEventListener('click', () => {
-		switchProvider('groq');
-		log('Switched provider to Groq API.', 'info');
-	});
-
-	providerGithubBtn.addEventListener('click', () => {
-		switchProvider('github');
-		log('Switched provider to GitHub Models.', 'info');
-	});
-
 	// Load Saved Settings from localStorage
 	function loadSettings() {
 		const savedKey = localStorage.getItem('groq_copilot_key');
-		const savedGithubToken = localStorage.getItem('github_models_token');
-		const activeProvider = localStorage.getItem('super_editor_provider') || 'groq';
 
 		if (savedKey) {
 			apiKeyInput.value = savedKey;
 		}
-		if (savedGithubToken) {
-			githubTokenInput.value = savedGithubToken;
-		}
 
-		// Initialize active provider panel & select options
-		switchProvider(activeProvider);
-		log(`Super Editor provider settings loaded securely. Active: ${activeProvider.toUpperCase()}`, 'success');
+		initializeProvider();
+		log('Super Editor settings loaded securely.', 'success');
 	}
 
 	// Save API Key Actions
@@ -402,39 +337,10 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		log('Groq API Key removed from local storage.', 'warning');
 	});
 
-	// Save GitHub Token Actions
-	saveGithubBtn.addEventListener('click', () => {
-		const token = githubTokenInput.value.trim();
-		
-		if (!token) {
-			log('Error: Token cannot be empty.', 'error');
-			return;
-		}
-		
-		localStorage.setItem('github_models_token', token);
-		log('GitHub settings saved successfully!', 'success');
-		tabPrompt.click(); // Switch back to editor tab
-	});
-
-	// Remove GitHub Token Actions
-	removeGithubBtn.addEventListener('click', () => {
-		localStorage.removeItem('github_models_token');
-		githubTokenInput.value = '';
-		log('GitHub credentials removed from local storage.', 'warning');
-	});
-
-
-
 	// Save Model Choice on select and update cost indicator
 	modelSelect.addEventListener('change', () => {
-		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
-		if (currentProvider === 'github') {
-			localStorage.setItem('github_models_model', modelSelect.value);
-			log(`Model switched to GitHub: ${modelSelect.value}`, 'info');
-		} else {
-			localStorage.setItem('groq_copilot_model', modelSelect.value);
-			log(`Model switched to Groq: ${modelSelect.value}`, 'info');
-		}
+		localStorage.setItem('groq_copilot_model', modelSelect.value);
+		log(`Model switched to Groq: ${modelSelect.value}`, 'info');
 		updateCostBadge();
 	});
 
@@ -689,11 +595,10 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 	// Bind chip-summarize click event (fully dynamic)
 	chipSummarize.addEventListener('click', async () => {
-		const provider = localStorage.getItem('super_editor_provider') || 'groq';
-		const hasToken = provider === 'github' ? localStorage.getItem('github_models_token') : localStorage.getItem('groq_copilot_key');
+		const hasToken = localStorage.getItem('groq_copilot_key');
 		
 		if (!hasToken) {
-			log(`Error: ${provider === 'github' ? 'GitHub Token' : 'Groq API Key'} is not configured. Add it in Settings.`, 'error');
+			log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
 			tabSettings.click();
 			return;
 		}
@@ -720,7 +625,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			
 			summaryText.innerText = activeSummaryContent;
 			summaryCard.style.display = 'block';
-			log(`Executive summary compiled successfully by ${provider === 'github' ? 'GitHub Models' : 'Groq AI'}!`, "success");
+			log('Executive summary compiled successfully by Groq AI!', 'success');
 		} catch (err) {
 			log(`Summarization failed: ${err.message}`, 'error');
 		} finally {
@@ -748,12 +653,11 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 	// Click run button (Refactored Intent-routed Context-aware Pipeline)
 	executeBtn.addEventListener('click', async () => {
-		const provider = localStorage.getItem('super_editor_provider') || 'groq';
-		const hasToken = provider === 'github' ? localStorage.getItem('github_models_token') : localStorage.getItem('groq_copilot_key');
+		const hasToken = localStorage.getItem('groq_copilot_key');
 		const prompt = promptInput.value.trim();
 
 		if (!hasToken) {
-			log(`Error: ${provider === 'github' ? 'GitHub Token' : 'Groq API Key'} is not configured. Add it in Settings.`, 'error');
+			log('Error: Groq API Key is not configured. Add it in Settings.', 'error');
 			tabSettings.click();
 			return;
 		}
@@ -800,12 +704,12 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			const docJSON = await serializeActiveContent(serializationMode);
 			cachedDocData = JSON.parse(docJSON);
 			
-			let totalElements = 0;
-			if (cachedDocData.sections) {
-				cachedDocData.sections.forEach(s => {
-					totalElements += s.elements.length;
-				});
-			}
+			lastExecutionDebugData.stateBefore = cachedDocData.sections || [];
+			if (typeof updateDebugViewer === 'function') updateDebugViewer();
+
+			const totalElements = cachedDocData.sections ? cachedDocData.sections.reduce((acc, s) => acc + (s.elements ? s.elements.length : 0), 0) : 0;
+			const docMeta = cachedDocData.metadata || {};
+			log(`[CONTEXT_BUILDER] Serialized ${totalElements} smart elements out of ${docMeta.totalElements || 0} total elements (Compaction: ${Math.round((totalElements / (docMeta.totalElements || 1)) * 100)}%). cursorIndex: ${docMeta.cursorIndex !== undefined ? docMeta.cursorIndex : 'N/A'}.`, 'success');
 
 			if (totalElements === 0 && intent !== INTENTS.CREATE_DOCUMENT) {
 				log('Error: Selection range or document is empty.', 'error');
@@ -815,9 +719,9 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 				return;
 			}
 
-			const activeModel = provider === 'github' ? localStorage.getItem('github_models_model') : localStorage.getItem('groq_copilot_model');
+			const activeModel = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
 
-			log(`Contacting ${provider === 'github' ? 'GitHub Models' : 'Groq API'} using model: ${activeModel}...`, 'info');
+			log(`Contacting Groq API using model: ${activeModel}...`, 'info');
 			lastExecutionDebugData.status = "Running (Querying LLM)...";
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			
@@ -826,7 +730,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			lastExecutionDebugData.rawResponse = aiResponse;
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			
-			log(`Received secure Action Plan from ${provider === 'github' ? 'GitHub Models' : 'Groq'}.`, 'success');
+			log('Received secure Action Plan from Groq.', 'success');
 			
 			proposedChanges = parseAIResponse(aiResponse);
 			lastExecutionDebugData.parsedPlans = proposedChanges;
@@ -986,13 +890,18 @@ Example response: {"intent": "rewrite"}`;
 You must NEVER generate OnlyOffice API commands directly (like Select(), AddElement(), etc.).
 You must ONLY output valid JSON containing a single "plans" key holding an array of high-level action objects.
 
+CRITICAL CARET/CURSOR ANCHORING RULES:
+1. If the user request asks to add, insert, generate, or create content (such as paragraphs, headings, lists, or tables) and a valid "cursorIndex" (>= 0) is specified in the document metadata under "metadata.cursorIndex", you MUST default to inserting/creating the content directly at or after the "cursorIndex" (i.e., targetIndex = cursorIndex).
+2. If the user explicitly asks to put content "where the mouse is", "where the cursor is", "under the cursor", "at the cursor", "at my selection", or similar, you MUST target the "cursorIndex" for the insertion action.
+3. Only override this behavior if the user specifies an explicit alternative location (e.g., "in last of the document" or "at the very beginning").
+
 Every plan action must follow this exact structure:
 {
   "plans": [
     {
       "action": "rewrite" | "change_font" | "change_color" | "create_paragraph" | "delete_paragraph" | "paste_html" | "make_list" | "change_indent" | "table_action",
       "targetIndex": 5, // index of target paragraph or table
-      "subAction": "create" | "add_row" | "add_column" | "delete_row" | "delete_column" | "merge_cells" | "cell_shading", // ONLY for "table_action"
+      "subAction": "create" | "add_row" | "add_column" | "delete_row" | "delete_column" | "merge_cells" | "cell_shading" | "set_cell_text", // ONLY for "table_action"
       "properties": {
         "newText": "Rewritten or newly created plain text here...",
         "html": "<p style='font-family:Arial;font-size:12pt;'>Styled HTML content for paste_html...</p>",
@@ -1011,13 +920,13 @@ Every plan action must follow this exact structure:
         "lineSpacing": 1.15,
         "shading": "#f3f4f6",
         
-        // List styling properties (ONLY for make_list):
+        // List styling properties (applicable for make_list AND create_paragraph):
         "listType": "bullet" | "numbered",
         "style": "bullet" | "decimal" | "lowerRoman" | "upperRoman" | "lowerLetter" | "upperLetter",
         "level": 0, // nesting level 0 to 8
         "formatString": "•" | "%1." | "%1)" | "%1.%2.",
         
-        // Indentation properties (ONLY for change_indent):
+        // Indentation properties (applicable for change_indent AND create_paragraph):
         "indLeft": 720, // in dxa/twips (1440 = 1 inch, 720 = 0.5 inch)
         "indRight": 720,
         "indFirstLine": 360,
@@ -1028,8 +937,9 @@ Every plan action must follow this exact structure:
         "rowIndex": 0, // for add_row or delete_row
         "colIndex": 0, // for delete_column
         "before": true, // for add_row
-        "cells": [[0, 0], [0, 1]], // coordinates [row, col] for merge_cells or cell_shading
-        "color": "#eff6ff" // shading color for cell_shading
+        "cells": [[0, 0], [0, 1]], // coordinates [row, col] for merge_cells, cell_shading, or set_cell_text
+        "color": "#eff6ff", // shading color for cell_shading
+        "cellData": [["header1", "header2"], ["val1", "val2"]] // 2D array of strings to populate table cells directly on subAction 'create'
       }
     }
   ]
@@ -1178,38 +1088,41 @@ User Request:
 					return { success: false, reason: `Text mismatch. Expected: "${props.newText.substring(0, 20)}...", Got: "${afterState.text.substring(0, 20)}..."` };
 				}
 			}
-			if (props.fontName !== undefined && afterState.fontName !== props.fontName) {
-				const cleanExpected = props.fontName.toLowerCase().replace(/['"\s]+/g, '');
-				const cleanAfter = afterState.fontName.toLowerCase().replace(/['"\s]+/g, '');
-				if (cleanAfter !== cleanExpected) {
-					// Lenient fallback check: custom/niche fonts might not be installed/rendered locally by the editor engine.
-					// If font name was set but defaulted to system Calibri/Times, and size or bold or underline did change successfully,
-					// we treat it as successfully executed rather than looping retries endlessly.
-					const sizeMatches = props.fontSize === undefined || afterState.fontSize === (props.fontSize / 2);
-					const boldMatches = props.bold === undefined || afterState.bold === !!props.bold;
-					const underlineMatches = props.underline === undefined || afterState.underline === !!props.underline;
-					
-					const sizeChanged = beforeState && beforeState.fontSize !== afterState.fontSize;
-					const boldChanged = beforeState && beforeState.bold !== afterState.bold;
-					const underlineChanged = beforeState && beforeState.underline !== afterState.underline;
-					
-					if ((props.fontSize && sizeMatches && sizeChanged) || 
-						(props.bold !== undefined && boldMatches && boldChanged) || 
-						(props.underline !== undefined && underlineMatches && underlineChanged)) {
-						// Lenient bypass: other styles successfully applied to this element!
-					} else {
-						return { success: false, reason: `Font Family mismatch. Expected: "${props.fontName}", Got: "${afterState.fontName}"` };
+			// Only verify styling if the paragraph has text content
+			if (afterState.text && afterState.text.trim() !== "") {
+				if (props.fontName !== undefined && afterState.fontName !== props.fontName) {
+					const cleanExpected = props.fontName.toLowerCase().replace(/['"\s]+/g, '');
+					const cleanAfter = afterState.fontName.toLowerCase().replace(/['"\s]+/g, '');
+					if (cleanAfter !== cleanExpected) {
+						// Lenient fallback check: custom/niche fonts might not be installed/rendered locally by the editor engine.
+						// If font name was set but defaulted to system Calibri/Times, and size or bold or underline did change successfully,
+						// we treat it as successfully executed rather than looping retries endlessly.
+						const sizeMatches = props.fontSize === undefined || afterState.fontSize === (props.fontSize / 2);
+						const boldMatches = props.bold === undefined || afterState.bold === !!props.bold;
+						const underlineMatches = props.underline === undefined || afterState.underline === !!props.underline;
+						
+						const sizeChanged = beforeState && beforeState.fontSize !== afterState.fontSize;
+						const boldChanged = beforeState && beforeState.bold !== afterState.bold;
+						const underlineChanged = beforeState && beforeState.underline !== afterState.underline;
+						
+						if ((props.fontSize && sizeMatches && sizeChanged) || 
+							(props.bold !== undefined && boldMatches && boldChanged) || 
+							(props.underline !== undefined && underlineMatches && underlineChanged)) {
+							// Lenient bypass: other styles successfully applied to this element!
+						} else {
+							return { success: false, reason: `Font Family mismatch. Expected: "${props.fontName}", Got: "${afterState.fontName}"` };
+						}
 					}
 				}
-			}
-			if (props.fontSize !== undefined && afterState.fontSize !== (props.fontSize / 2)) {
-				return { success: false, reason: `Font Size mismatch. Expected: ${props.fontSize / 2}pt, Got: ${afterState.fontSize}pt` };
-			}
-			if (props.bold !== undefined && afterState.bold !== !!props.bold) {
-				return { success: false, reason: `Font Weight (Bold) mismatch. Expected: ${!!props.bold}, Got: ${afterState.bold}` };
-			}
-			if (props.underline !== undefined && afterState.underline !== !!props.underline) {
-				return { success: false, reason: `Underline mismatch. Expected: ${!!props.underline}, Got: ${afterState.underline}` };
+				if (props.fontSize !== undefined && afterState.fontSize !== (props.fontSize / 2)) {
+					return { success: false, reason: `Font Size mismatch. Expected: ${props.fontSize / 2}pt, Got: ${afterState.fontSize}pt` };
+				}
+				if (props.bold !== undefined && afterState.bold !== !!props.bold) {
+					return { success: false, reason: `Font Weight (Bold) mismatch. Expected: ${!!props.bold}, Got: ${afterState.bold}` };
+				}
+				if (props.underline !== undefined && afterState.underline !== !!props.underline) {
+					return { success: false, reason: `Underline mismatch. Expected: ${!!props.underline}, Got: ${afterState.underline}` };
+				}
 			}
 			return { success: true };
 		}
@@ -1628,6 +1541,23 @@ User Request:
 				var documentHeadings = [];
 				var pageSettings = null;
 				var elementsCount = oDocument.GetElementsCount();
+				
+				var cursorIndex = -1;
+				if (oRange) {
+					try {
+						var caretParagraphs = oRange.GetAllParagraphs();
+						if (caretParagraphs && caretParagraphs.length > 0) {
+							var caretPara = caretParagraphs[0];
+							for (var j = 0; j < elementsCount; j++) {
+								var docElem = oDocument.GetElement(j);
+								if (docElem === caretPara) {
+									cursorIndex = j;
+									break;
+								}
+							}
+						}
+					} catch(e) {}
+				}
 
 				if (targetMode === "full") {
 					// Compile global document outline map & section styles beforehand
@@ -1863,14 +1793,51 @@ User Request:
 					});
 					
 				} else {
-					// --- ENTIRE DOCUMENT MODE (Root Section fallback) ---
+					// --- ENTIRE DOCUMENT MODE (Root Section fallback with Caret-Anchored sliding window) ---
 					var currentSection = {
 						title: "Root Section",
 						elements: []
 					};
 					
-					var limit = Math.min(elementsCount, 250);
-					for (var i = 0; i < limit; i++) {
+					var indicesToSerialize = [];
+					var maxWholeDocLimit = 45; // max elements to serialize in entire doc mode to prevent TPM limit errors
+					
+					if (elementsCount <= maxWholeDocLimit) {
+						for (var i = 0; i < elementsCount; i++) {
+							indicesToSerialize.push(i);
+						}
+					} else {
+						var indexSet = {};
+						
+						// 1. First 15 paragraphs (Intro)
+						var firstLimit = Math.min(15, elementsCount);
+						for (var i = 0; i < firstLimit; i++) {
+							indexSet[i] = true;
+						}
+						
+						// 2. Last 15 paragraphs (Outro)
+						var lastStart = Math.max(0, elementsCount - 15);
+						for (var i = lastStart; i < elementsCount; i++) {
+							indexSet[i] = true;
+						}
+						
+						// 3. Cursor neighborhood: 15 paragraphs around cursor
+						if (cursorIndex !== -1) {
+							var cursorStart = Math.max(0, cursorIndex - 7);
+							var cursorEnd = Math.min(elementsCount, cursorIndex + 8);
+							for (var i = cursorStart; i < cursorEnd; i++) {
+								indexSet[i] = true;
+							}
+						}
+						
+						for (var idx in indexSet) {
+							indicesToSerialize.push(parseInt(idx, 10));
+						}
+						indicesToSerialize.sort(function(a, b) { return a - b; });
+					}
+					
+					for (var sIdx = 0; sIdx < indicesToSerialize.length; sIdx++) {
+						var i = indicesToSerialize[sIdx];
 						try {
 							var oElement = oDocument.GetElement(i);
 							if (!oElement) continue;
@@ -1988,11 +1955,13 @@ User Request:
 				
 				return JSON.stringify({
 					mode: isSelection ? "selection" : "document",
+					targetMode: targetMode,
 					metadata: {
 						totalElements: elementsCount,
 						selectedElementsCount: isSelection ? selectedParagraphs.length : elementsCount,
 						selectionRange: isSelection ? { start: firstAbsIndex, end: lastAbsIndex } : null,
-						pageSettings: pageSettings
+						pageSettings: pageSettings,
+						cursorIndex: cursorIndex
 					},
 					documentHeadings: documentHeadings,
 					surroundingContext: isSelection ? {
@@ -2013,103 +1982,55 @@ User Request:
 		});
 	}
 
-	// Unified LLM Requester supporting Groq API and GitHub Models
+	// Unified LLM Requester supporting Groq API
 	async function queryActiveLLM(messages, temperature = 0.1, isJsonMode = false) {
-		const currentProvider = localStorage.getItem('super_editor_provider') || 'groq';
-		
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 seconds timeout
 
 		try {
-			if (currentProvider === 'github') {
-				const token = localStorage.getItem('github_models_token');
-				const model = localStorage.getItem('github_models_model') || 'gpt-4o-mini';
-				
-				if (!token) {
-					throw new Error("GitHub Token (PAT) is not configured. Add it in Settings.");
-				}
-				
-				const requestBody = {
-					model: model,
-					messages: messages,
-					temperature: temperature
-				};
-				
-				if (isJsonMode) {
-					requestBody.response_format = { type: 'json_object' };
-				}
-				
-				const response = await fetch('https://models.github.ai/inference/chat/completions', {
-					method: 'POST',
-					headers: {
-						'Authorization': `Bearer ${token}`,
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify(requestBody),
-					signal: controller.signal
-				});
-				
-				clearTimeout(timeoutId);
-				
-				if (!response.ok) {
-					const errorText = await response.text().catch(() => '');
-					let errorMsg = `HTTP ${response.status}`;
-					try {
-						const errorData = JSON.parse(errorText);
-						errorMsg = errorData.message || errorData.error?.message || errorMsg;
-					} catch (parseErr) {
-						if (errorText) errorMsg = `${errorMsg}: ${errorText.substring(0, 100)}`;
-					}
-					throw new Error(errorMsg);
-				}
-				
-				const data = await response.json();
-				return data.choices[0].message.content;
-			} else {
-				const apiKey = localStorage.getItem('groq_copilot_key');
-				const model = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
-				
-				if (!apiKey) {
-					throw new Error("Groq API Key is not configured. Add it in Settings.");
-				}
-				
-				const requestBody = {
-					model: model,
-					messages: messages,
-					temperature: temperature
-				};
-				
-				if (isJsonMode) {
-					requestBody.response_format = { type: 'json_object' };
-				}
-				
-				const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-					method: 'POST',
-					headers: {
-						'Authorization': `Bearer ${apiKey}`,
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify(requestBody),
-					signal: controller.signal
-				});
-				
-				clearTimeout(timeoutId);
-				
-				if (!response.ok) {
-					const errorText = await response.text().catch(() => '');
-					let errorMsg = `HTTP ${response.status}`;
-					try {
-						const errorData = JSON.parse(errorText);
-						errorMsg = errorData.error?.message || errorMsg;
-					} catch (parseErr) {
-						if (errorText) errorMsg = `${errorMsg}: ${errorText.substring(0, 100)}`;
-					}
-					throw new Error(errorMsg);
-				}
-				
-				const data = await response.json();
-				return data.choices[0].message.content;
+			const apiKey = localStorage.getItem('groq_copilot_key');
+			const model = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
+			
+			if (!apiKey) {
+				throw new Error("Groq API Key is not configured. Add it in Settings.");
 			}
+			
+			const requestBody = {
+				model: model,
+				messages: messages,
+				temperature: temperature
+			};
+			
+			if (isJsonMode) {
+				requestBody.response_format = { type: 'json_object' };
+			}
+			
+			const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(requestBody),
+				signal: controller.signal
+			});
+			
+			clearTimeout(timeoutId);
+			
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => '');
+				let errorMsg = `HTTP ${response.status}`;
+				try {
+					const errorData = JSON.parse(errorText);
+					errorMsg = errorData.error?.message || errorMsg;
+				} catch (parseErr) {
+					if (errorText) errorMsg = `${errorMsg}: ${errorText.substring(0, 100)}`;
+				}
+				throw new Error(errorMsg);
+			}
+			
+			const data = await response.json();
+			return data.choices[0].message.content;
 		} catch (err) {
 			clearTimeout(timeoutId);
 			if (err.name === 'AbortError') {
@@ -2337,8 +2258,17 @@ User Request:
 		changesCard.style.display = 'block';
 	}
 
-	// Sequential, Animated, Interactive execution engine utilizing AddElem	// Sequential, Gated, Self-Healing executor engine utilizing Verification and Retry layers
+	// Sequential, Gated, Self-Healing executor engine utilizing Verification and Retry layers
 	function executeSequentialEdits(changes) {
+		// Normalize standard points to half-points for OnlyOffice API compatibility once
+		if (changes && Array.isArray(changes)) {
+			changes.forEach(change => {
+				if (change && change.properties && change.properties.fontSize !== undefined) {
+					change.properties.fontSize = Number(change.properties.fontSize) * 2;
+				}
+			});
+		}
+
 		let i = 0;
 		let indexOffset = 0; // Dynamic tracking of index drift caused by creations, deletions, and Pastes
 		let retryCount = 0;
@@ -2366,12 +2296,6 @@ User Request:
 			}
 
 			const change = changes[i];
-			
-			// Normalize standard points to half-points for OnlyOffice API compatibility
-			if (change && change.properties && change.properties.fontSize !== undefined) {
-				change.properties.fontSize = Number(change.properties.fontSize) * 2;
-			}
-			
 			const actionName = change.action || 'rewrite';
 			const targetIndex = change.targetIndex;
 			const actualTargetIndex = targetIndex + indexOffset;
@@ -2417,6 +2341,14 @@ User Request:
 							var actualTargetIndex = Asc.scope.actualTargetIndex;
 							var oDocument = Api.GetDocument();
 							var countBefore = oDocument.GetElementsCount();
+							
+							// Clamp index to prevent out-of-bounds AddElement errors when appending
+							if (actualTargetIndex >= countBefore) {
+								actualTargetIndex = countBefore - 1;
+							}
+							if (actualTargetIndex < 0) {
+								actualTargetIndex = 0;
+							}
 							
 							var origFont = "Calibri";
 							var origSize = 22;
@@ -2477,6 +2409,32 @@ User Request:
 								if (oProps.newText) {
 									parseAndApplyTextWithTags(oNewParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
 								}
+								
+								// Apply list numbering directly if specified in properties
+								if (oProps.listType) {
+									var listType = oProps.listType === "bullet" ? "bulleted" : "numbered";
+									var oNumbering = oDocument.CreateNumbering(listType);
+									if (oNumbering) {
+										var level = oProps.level !== undefined ? Number(oProps.level) : 0;
+										var oLevel = oNumbering.GetLevel(level);
+										if (oLevel) {
+											var style = oProps.style || (oProps.listType === "bullet" ? "bullet" : "decimal");
+											var formatString = oProps.formatString || (oProps.listType === "bullet" ? "•" : "%1.");
+											oLevel.SetCustomType(style, formatString, "left");
+											oNewParagraph.SetNumbering(oLevel);
+										}
+									}
+								}
+								
+								// Apply indents directly if specified in properties
+								if (oProps.indLeft !== undefined || oProps.indRight !== undefined || oProps.indFirstLine !== undefined) {
+									var oParaPr = oNewParagraph.GetParaPr();
+									if (oParaPr) {
+										if (oProps.indLeft !== undefined) oParaPr.SetIndLeft(Number(oProps.indLeft));
+										if (oProps.indRight !== undefined) oParaPr.SetIndRight(Number(oProps.indRight));
+										if (oProps.indFirstLine !== undefined) oParaPr.SetIndFirstLine(Number(oProps.indFirstLine));
+									}
+								}
 							} catch(e) {}
 							
 							var countAfter = oDocument.GetElementsCount();
@@ -2489,11 +2447,18 @@ User Request:
 						window.Asc.plugin.callCommand(function() {
 							var actualTargetIndex = Asc.scope.actualTargetIndex;
 							var oDocument = Api.GetDocument();
+							var countBefore = oDocument.GetElementsCount();
+							if (actualTargetIndex >= countBefore) {
+								actualTargetIndex = countBefore - 1;
+							}
+							if (actualTargetIndex < 0) {
+								actualTargetIndex = 0;
+							}
 							var oParagraph = oDocument.GetElement(actualTargetIndex);
 							if (oParagraph) {
 								oParagraph.Select();
 							}
-							return oDocument.GetElementsCount();
+							return countBefore;
 						}, false, true, function(countBefore) {
 							window.Asc.plugin.executeMethod("PasteHtml", [change.properties.html || ''], function() {
 								window.Asc.plugin.callCommand(function() {
@@ -2510,6 +2475,13 @@ User Request:
 							var actualTargetIndex = Asc.scope.actualTargetIndex;
 							var oProps = change.properties || {};
 							var oDocument = Api.GetDocument();
+							var countBefore = oDocument.GetElementsCount();
+							if (actualTargetIndex >= countBefore) {
+								actualTargetIndex = countBefore - 1;
+							}
+							if (actualTargetIndex < 0) {
+								actualTargetIndex = 0;
+							}
 							var oParagraph = oDocument.GetElement(actualTargetIndex);
 							if (oParagraph && oParagraph.GetClassType() === "paragraph") {
 								var listType = oProps.listType === "bullet" ? "bulleted" : "numbered";
@@ -2536,12 +2508,45 @@ User Request:
 							var oProps = change.properties || {};
 							var subAction = change.subAction || oProps.subAction;
 							var oDocument = Api.GetDocument();
+							var countBefore = oDocument.GetElementsCount();
+							
+							// Clamp index to prevent out-of-bounds AddElement errors when appending
+							if (actualTargetIndex >= countBefore) {
+								actualTargetIndex = countBefore - 1;
+							}
+							if (actualTargetIndex < 0) {
+								actualTargetIndex = 0;
+							}
 							
 							if (subAction === 'create') {
 								var rows = Number(oProps.rows || 2);
 								var cols = Number(oProps.cols || 2);
 								var oTable = Api.CreateTable(cols, rows);
 								if (oTable) {
+									// Populate cellData if provided
+									if (oProps.cellData && Array.isArray(oProps.cellData)) {
+										for (var r = 0; r < Math.min(rows, oProps.cellData.length); r++) {
+											var rowData = oProps.cellData[r];
+											if (rowData && Array.isArray(rowData)) {
+												for (var c = 0; c < Math.min(cols, rowData.length); c++) {
+													var textVal = String(rowData[c] || "");
+													var cell = oTable.GetCell(r, c);
+													if (cell) {
+														var cellContent = cell.GetContent();
+														var cellParagraphs = cellContent.GetAllParagraphs();
+														if (cellParagraphs && cellParagraphs.length > 0) {
+															cellParagraphs[0].RemoveAllElements();
+															cellParagraphs[0].AddText(textVal);
+														} else {
+															var oPara = Api.CreateParagraph();
+															oPara.AddText(textVal);
+															cellContent.AddElement(0, oPara);
+														}
+													}
+												}
+											}
+										}
+									}
 									oDocument.AddElement(actualTargetIndex + 1, oTable);
 									return { delta: 1 };
 								}
@@ -2615,6 +2620,25 @@ User Request:
 											if (typeof cell.SetBorderTop === 'function') cell.SetBorderTop(style, size, 0, r, g, b);
 										}
 									}
+								} else if (subAction === 'set_cell_text' || subAction === 'setCellText') {
+									var cellCoords = oProps.cells || [];
+									var textVal = oProps.newText || "";
+									for (var k = 0; k < cellCoords.length; k++) {
+										var coords = cellCoords[k];
+										var cell = oTable.GetCell(coords[0], coords[1]);
+										if (cell) {
+											var cellContent = cell.GetContent();
+											var cellParagraphs = cellContent.GetAllParagraphs();
+											if (cellParagraphs && cellParagraphs.length > 0) {
+												cellParagraphs[0].RemoveAllElements();
+												cellParagraphs[0].AddText(textVal);
+											} else {
+												var oPara = Api.CreateParagraph();
+												oPara.AddText(textVal);
+												cellContent.AddElement(0, oPara);
+											}
+										}
+									}
 								}
 							}
 							return { delta: 0 };
@@ -2628,6 +2652,16 @@ User Request:
 							var change = Asc.scope.change;
 							var actualTargetIndex = Asc.scope.actualTargetIndex;
 							var oDocument = Api.GetDocument();
+							var countBefore = oDocument.GetElementsCount();
+							
+							// Clamp index to prevent out-of-bounds target formatting references
+							if (actualTargetIndex >= countBefore) {
+								actualTargetIndex = countBefore - 1;
+							}
+							if (actualTargetIndex < 0) {
+								actualTargetIndex = 0;
+							}
+							
 							var oParagraph = oDocument.GetElement(actualTargetIndex);
 							
 							var origFont = "Calibri";
@@ -2880,8 +2914,15 @@ User Request:
 		// HTML Tag Parser
 		function parseAndApplyTextWithTags(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
 			try { oPar.RemoveAllElements(); } catch(e) {}
+			if (htmlStr) {
+				htmlStr = htmlStr
+					.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+					.replace(/__(.*?)__/g, '<b>$1</b>')
+					.replace(/\*(.*?)\*/g, '<i>$1</i>')
+					.replace(/_(.*?)_/g, '<i>$1</i>');
+			}
 			var regex = /(<[^>]+>)/g;
-			var parts = htmlStr.split(regex);
+			var parts = String(htmlStr || "").split(regex);
 			var formatState = {
 				fontName: pProps.fontName || defFont || "Calibri",
 				fontSize: pProps.fontSize || defSize || 22,
@@ -2898,6 +2939,62 @@ User Request:
 				color: pProps.color || defColorHex || "#000000",
 				highlight: pProps.highlight || defHighlight || "none"
 			};
+
+			if (!htmlStr) {
+				// For empty strings, generate a single empty run to capture formatting properties
+				var oRun = null;
+				try { oRun = oPar.AddText(""); } catch(eText) {}
+				if (oRun) {
+					if (formatState.fontName) {
+						try { oRun.SetFontFamily(formatState.fontName); } catch(e) {}
+						try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+					}
+					if (formatState.fontSize) {
+						try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+					}
+					try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+					try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+					try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+					try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+					try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+					try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+					try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+					try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+					try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+					try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+					
+					if (formatState.highlight) {
+						try {
+							var hl = formatState.highlight.toLowerCase().trim();
+							if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+							else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+							else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+							else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+							else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+							else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+							else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+							else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+							else oRun.SetHighlight(hl);
+						} catch(eHighlight) {}
+					}
+					
+					if (formatState.color) {
+						try {
+							var hex = String(formatState.color).replace('#', '').trim();
+							if (hex.length === 6) {
+								var red = parseInt(hex.substring(0, 2), 16);
+								var green = parseInt(hex.substring(2, 4), 16);
+								var blue = parseInt(hex.substring(4, 6), 16);
+								try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+									try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+								}
+							}
+						} catch(eColorOuter) {}
+					}
+				}
+				return;
+			}
+
 			var stateStack = [JSON.parse(JSON.stringify(formatState))];
 			
 			for (var idx = 0; idx < parts.length; idx++) {

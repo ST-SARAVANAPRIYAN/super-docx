@@ -678,14 +678,6 @@
 
 		<!-- SETTINGS VIEW PANE -->
 		<div class="view-pane" id="view-settings">
-			<div class="card">
-				<div class="card-title">Service Provider</div>
-				<div style="display: flex; gap: 8px; margin-top: 8px;">
-					<button class="btn btn-outline active" id="provider-groq-btn" style="flex: 1; padding: 8px; font-size: 11px;">Groq API</button>
-					<button class="btn btn-outline" id="provider-github-btn" style="flex: 1; padding: 8px; font-size: 11px;">GitHub Models</button>
-				</div>
-			</div>
-
 			<div class="card" id="panel-groq">
 				<div class="card-title">Groq Configuration</div>
 				
@@ -700,26 +692,6 @@
 				<div class="btn-group">
 					<button class="btn btn-outline" id="save-key-btn" style="flex: 1; padding: 10px; font-size: 11.5px;">Save Key</button>
 					<button class="btn btn-danger" id="remove-key-btn" style="flex: 1; padding: 10px; font-size: 11.5px;">Remove Key</button>
-				</div>
-			</div>
-
-			<div class="card" id="panel-github" style="display: none;">
-				<div class="card-title">GitHub Models Configuration</div>
-				
-				<div class="form-group">
-					<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-						<label for="github-token" style="margin-bottom: 0;">GitHub Personal Access Token (PAT)</label>
-						<a href="https://github.com/settings/tokens/new?scopes=repo&description=Super-Docx%20Plugin" target="_blank" class="btn btn-outline" style="font-size: 9.5px; padding: 2px 6px; text-decoration: none; border-radius: 3px; cursor: pointer;">Generate PAT ↗</a>
-					</div>
-					<div class="input-container">
-						<input type="password" id="github-token" placeholder="Enter github_pat_..." />
-						<span class="eye-icon" id="toggle-github-visibility">👁️</span>
-					</div>
-				</div>
-
-				<div class="btn-group">
-					<button class="btn btn-outline" id="save-github-btn" style="flex: 1; padding: 10px; font-size: 11.5px;">Save Token</button>
-					<button class="btn btn-danger" id="remove-github-btn" style="flex: 1; padding: 10px; font-size: 11.5px;">Remove Token</button>
 				</div>
 			</div>
 
@@ -773,7 +745,10 @@
 					<select id="model-select" style="margin-top: 8px;">
 						<option value="llama-3.3-70b-versatile">Llama 3.3 70B (Recommended)</option>
 						<option value="llama-3.1-8b-instant">Llama 3.1 8B (Fast)</option>
-						<option value="llama3-70b-8192">Llama 3 70B (Alternative)</option>
+						<option value="llama-3.2-3b-preview">Llama 3.2 3B (Lightweight)</option>
+						<option value="llama-3.2-1b-preview">Llama 3.2 1B (Ultra-fast)</option>
+						<option value="deepseek-r1-distill-qwen-32b">DeepSeek R1 32B (Reasoning)</option>
+						<option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B (Reasoning)</option>
 					</select>
 				</div>
 			</div>
