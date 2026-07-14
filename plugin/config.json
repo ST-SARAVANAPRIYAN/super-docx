@@ -1,12 +1,12 @@
 {
-  "name": "Super Editor",
+  "name": "OneScript",
   "nameLocale": {
-    "ru": "Super Editor",
-    "fr": "Super Editor",
-    "es": "Super Editor",
-    "pt-BR": "Super Editor",
-    "de": "Super Editor",
-    "cs-CS": "Super Editor"
+    "ru": "OneScript",
+    "fr": "OneScript",
+    "es": "OneScript",
+    "pt-BR": "OneScript",
+    "de": "OneScript",
+    "cs-CS": "OneScript"
   },
   "author": "A fellow dev",
   "authorLocale": {

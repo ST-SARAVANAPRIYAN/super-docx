@@ -1,4 +1,4 @@
-// Automated integration test for super-docx selection serializers
+// Automated integration test for OneScript selection serializers
 // This mocks the ONLYOFFICE DOM document and elements structure to verify stop-word filtering & run parsing logic.
 
 const assert = require('assert');

@@ -38,7 +38,7 @@
 	const toolbarRedo = document.getElementById('toolbar-redo');
 
 	// Persistent Log File
-	const logStorageKey = "super_docx_log_file";
+	const logStorageKey = "onescript_log_file";
 	let logLines = [];
 
 	// Scan Range is determined dynamically
@@ -239,10 +239,10 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 	toggleKeyVisibility.addEventListener('click', () => {
 		if (apiKeyInput.type === 'password') {
 			apiKeyInput.type = 'text';
-			toggleKeyVisibility.innerText = '🙈';
+			toggleKeyVisibility.innerText = 'HIDE';
 		} else {
 			apiKeyInput.type = 'password';
-			toggleKeyVisibility.innerText = '👁️';
+			toggleKeyVisibility.innerText = 'SHOW';
 		}
 	});
 
@@ -315,7 +315,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 
 		initializeProvider();
-		log('Super Editor settings loaded securely.', 'success');
+		log('OneScript settings loaded securely.', 'success');
 	}
 
 	// Save API Key Actions
@@ -371,7 +371,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = `super-docx-log-${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+		link.download = `onescript-log-${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
 		document.body.appendChild(link);
 		link.click();
 		link.remove();
@@ -549,10 +549,31 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 	var debouncedRefresh = debounce(refreshDocStructureView, 250);
 
+	// Dynamic theme handler to adapt to ONLYOFFICE editor light/dark mode
+	window.Asc.plugin.onThemeChanged = function(theme) {
+		if (window.Asc.plugin.onThemeChangedBase) {
+			window.Asc.plugin.onThemeChangedBase(theme);
+		}
+		
+		const isDark = theme.type === "dark" || theme.type === "contrast-dark";
+		document.body.classList.toggle('theme-dark', isDark);
+		document.body.classList.toggle('theme-light', !isDark);
+		
+		// Map any CSS variables passed from ONLYOFFICE to document root
+		const root = document.documentElement;
+		for (let key in theme) {
+			if (key.startsWith('--')) {
+				root.style.setProperty(key, theme[key]);
+			}
+		}
+		
+		log('Theme adapted to OnlyOffice: ' + theme.type, 'info');
+	};
+
 	// Initialize ONLYOFFICE plugin hooks
 	window.Asc.plugin.init = function() {
 		loadLogFile();
-		log('Super Editor initialized.', 'success');
+		log('OneScript initialized.', 'success');
 		loadSettings();
 		
 		// Attach to selection change event to dynamically update the JSON structure view instantly!

@@ -3,34 +3,59 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Super Editor</title>
+	<title>OneScript</title>
+	<link rel="stylesheet" href="./../v1/plugins.css">
 	<style>
-		@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+		@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 		:root {
-			--bg-base: #1a1b26;
-			--bg-surface: #1f2335;
-			--bg-card: #24283c;
-			--bg-input: #16161e;
-			--border-color: #3b4261;
-			--border-accent: #7aa2f7;
-			--text-primary: #c0caf5;
-			--text-secondary: #9aa5ce;
-			--text-muted: #565f89;
-			--primary: #7aa2f7;
-			--primary-hover: #89ddff;
-			--primary-glow: rgba(122, 162, 247, 0.15);
-			--accent-purple: #bb9af7;
-			--success: #9ece6a;
-			--error: #f7768e;
-			--warning: #ff9e64;
-			--info: #7dcfff;
-			--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-			--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+			/* Light theme by default (Adapts to ONLYOFFICE normal style) */
+			--bg-base: #f4f4f4;
+			--bg-surface: #fdfdfd;
+			--bg-card: #ffffff;
+			--bg-input: #ffffff;
+			--border-color: #cfcfcf;
+			--border-accent: #df5e3a;
+			--text-primary: #333333;
+			--text-secondary: #555555;
+			--text-muted: #8c8c8c;
+			--primary: #df5e3a; /* OnlyOffice Brand Red-Orange */
+			--primary-hover: #cb5330;
+			--primary-glow: rgba(223, 94, 58, 0.12);
+			--accent-purple: #8e44ad;
+			--success: #2ecc71;
+			--error: #e74c3c;
+			--warning: #f1c40f;
+			--info: #3498db;
+			--font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+			--font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 			--border-radius-boxy: 2px;
-			--border-radius-card: 4px;
-			--shadow-boxy: 3px 3px 0px #16161e;
-			--shadow-boxy-hover: 1px 1px 0px #16161e;
+			--border-radius-card: 2px;
+			--shadow-boxy: none;
+			--shadow-boxy-hover: none;
+		}
+
+		body.theme-dark {
+			/* Dark theme variables matching OnlyOffice Dark mode */
+			--bg-base: #2d2d2d;
+			--bg-surface: #383838;
+			--bg-card: #383838;
+			--bg-input: #1e1e1e;
+			--border-color: #444444;
+			--border-accent: #ff6f3d;
+			--text-primary: #dddddd;
+			--text-secondary: #aaaaaa;
+			--text-muted: #777777;
+			--primary: #ff6f3d;
+			--primary-hover: #ff8558;
+			--primary-glow: rgba(255, 111, 61, 0.18);
+			--accent-purple: #bb9af7;
+			--success: #5e9e5e;
+			--error: #d9534f;
+			--warning: #f0ad4e;
+			--info: #5bc0de;
+			--shadow-boxy: none;
+			--shadow-boxy-hover: none;
 		}
 
 		* {
@@ -61,8 +86,8 @@
 			background-color: var(--bg-base);
 			color: var(--text-primary);
 			font-family: var(--font-sans);
-			font-size: 13px;
-			line-height: 1.5;
+			font-size: 11px;
+			line-height: 1.4;
 			height: 100vh;
 			display: flex;
 			flex-direction: column;
@@ -71,8 +96,8 @@
 
 		/* Header and Tabs */
 		.header {
-			padding: 16px 16px 8px 16px;
-			border-bottom: 2px solid var(--border-color);
+			padding: 12px 12px 6px 12px;
+			border-bottom: 1px solid var(--border-color);
 			flex-shrink: 0;
 			background: var(--bg-surface);
 		}
@@ -81,31 +106,30 @@
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			margin-bottom: 14px;
+			margin-bottom: 10px;
 		}
 
 		.logo-title {
-			font-size: 15px;
-			font-weight: 800;
-			font-family: var(--font-mono);
-			color: var(--primary);
+			font-size: 13px;
+			font-weight: 700;
+			font-family: var(--font-sans);
+			color: var(--text-primary);
 			letter-spacing: -0.01em;
 			display: flex;
 			align-items: center;
 			gap: 6px;
-			border-left: 3px solid var(--accent-purple);
+			border-left: 3px solid var(--primary);
 			padding-left: 8px;
 		}
 
 		.badge {
 			font-size: 9px;
-			background: rgba(187, 154, 247, 0.12);
-			color: var(--accent-purple);
+			background: var(--bg-base);
+			color: var(--text-secondary);
 			padding: 2px 6px;
 			border-radius: var(--border-radius-boxy);
-			border: 1px solid rgba(187, 154, 247, 0.25);
-			font-weight: 700;
-			letter-spacing: 0.05em;
+			border: 1px solid var(--border-color);
+			font-weight: 600;
 			text-transform: uppercase;
 			font-family: var(--font-mono);
 		}
@@ -115,80 +139,78 @@
 			border: 1px solid var(--border-color);
 			color: var(--text-primary);
 			border-radius: var(--border-radius-boxy);
-			width: 28px;
-			height: 28px;
+			width: 24px;
+			height: 24px;
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			cursor: pointer;
-			font-size: 12px;
-			transition: all 0.15s ease;
-			box-shadow: 1px 1px 0px #16161e;
+			font-size: 11px;
+			transition: all 0.1s ease;
 		}
 
 		.tool-icon-btn:hover {
-			background: var(--bg-card);
-			border-color: var(--primary);
-			transform: translate(-1px, -1px);
-			box-shadow: 2px 2px 0px #16161e;
+			background: var(--bg-base);
+			border-color: var(--text-secondary);
 		}
 
 		.tool-icon-btn:active {
-			transform: translate(1px, 1px);
-			box-shadow: none;
+			background: var(--border-color);
 		}
 
 		.tabs {
 			display: flex;
-			gap: 6px;
-			background: var(--bg-input);
-			border: 1px solid var(--border-color);
-			padding: 4px;
-			border-radius: var(--border-radius-boxy);
+			gap: 2px;
+			background: transparent;
+			padding: 0;
+			margin-top: 4px;
 		}
 
 		.tab-btn {
 			flex: 1;
 			background: transparent;
-			border: none;
-			color: var(--text-muted);
+			border: 1px solid transparent;
+			border-bottom: none;
+			color: var(--text-secondary);
 			padding: 6px 12px;
 			font-size: 11px;
-			font-weight: 700;
-			font-family: var(--font-mono);
-			border-radius: var(--border-radius-boxy);
+			font-weight: 500;
+			font-family: var(--font-sans);
+			border-top-left-radius: var(--border-radius-boxy);
+			border-top-right-radius: var(--border-radius-boxy);
 			cursor: pointer;
-			transition: all 0.15s ease;
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			text-align: center;
+			margin-bottom: -1px;
 		}
 
 		.tab-btn:hover {
-			color: var(--text-secondary);
+			color: var(--text-primary);
+			background: var(--bg-base);
 		}
 
 		.tab-btn.active {
-			background: var(--bg-surface);
+			background: var(--bg-base);
 			color: var(--primary);
-			border: 1px solid var(--border-color);
-			box-shadow: 1px 1px 0px #16161e;
+			border-color: var(--border-color);
+			border-bottom: 1px solid var(--bg-base);
+			font-weight: 600;
 		}
 
 		/* Main Content Layout */
 		.content-container {
 			flex: 1;
 			overflow-y: auto;
-			padding: 16px;
+			padding: 12px;
 			display: flex;
 			flex-direction: column;
-			gap: 16px;
+			gap: 12px;
 			background: var(--bg-base);
 		}
 
 		.view-pane {
 			display: none;
 			flex-direction: column;
-			gap: 16px;
+			gap: 12px;
 			height: 100%;
 		}
 
@@ -196,38 +218,37 @@
 			display: flex;
 		}
 
-		/* Boxy Cards */
+		/* Flat Cards */
 		.card {
 			background: var(--bg-card);
 			border: 1px solid var(--border-color);
 			border-radius: var(--border-radius-card);
-			padding: 16px;
-			box-shadow: var(--shadow-boxy);
+			padding: 12px;
 			position: relative;
 		}
 
 		.card-title {
 			font-size: 11px;
-			font-weight: 700;
-			color: var(--accent-purple);
+			font-weight: 600;
+			color: var(--primary);
 			text-transform: uppercase;
-			letter-spacing: 0.08em;
-			margin-bottom: 12px;
-			font-family: var(--font-mono);
+			letter-spacing: 0.05em;
+			margin-bottom: 10px;
+			font-family: var(--font-sans);
 			display: flex;
 			align-items: center;
 			gap: 6px;
 		}
 
 		.card-title::before {
-			content: ">";
+			content: "▪";
 			color: var(--primary);
-			font-weight: 800;
+			font-size: 12px;
 		}
 
 		/* Form elements */
 		.form-group {
-			margin-bottom: 14px;
+			margin-bottom: 12px;
 		}
 
 		.form-group:last-child {
@@ -237,12 +258,10 @@
 		label {
 			display: block;
 			font-size: 11px;
-			font-weight: 700;
+			font-weight: 600;
 			color: var(--text-secondary);
-			margin-bottom: 6px;
-			font-family: var(--font-mono);
-			text-transform: uppercase;
-			letter-spacing: 0.02em;
+			margin-bottom: 4px;
+			font-family: var(--font-sans);
 		}
 
 		.input-container {
@@ -257,15 +276,15 @@
 			border: 1px solid var(--border-color);
 			border-radius: var(--border-radius-boxy);
 			color: var(--text-primary);
-			padding: 10px 12px;
-			font-family: var(--font-mono);
-			font-size: 12px;
+			padding: 6px 8px;
+			font-family: var(--font-sans);
+			font-size: 11px;
 			outline: none;
-			transition: border-color 0.15s ease;
+			transition: border-color 0.1s ease;
 		}
 
 		input[type="password"] {
-			padding-right: 40px;
+			padding-right: 32px;
 		}
 
 		input:focus, select:focus, textarea:focus {
@@ -275,44 +294,42 @@
 		/* Range selector button style */
 		.range-selector {
 			display: flex;
-			background: var(--bg-input);
+			background: var(--bg-base);
 			border: 1px solid var(--border-color);
-			padding: 3px;
+			padding: 2px;
 			border-radius: var(--border-radius-boxy);
-			margin-bottom: 10px;
+			margin-bottom: 8px;
 		}
 
 		.range-btn {
 			flex: 1;
 			background: transparent;
 			border: none;
-			color: var(--text-muted);
+			color: var(--text-secondary);
 			font-size: 11px;
-			font-weight: 700;
-			font-family: var(--font-mono);
-			padding: 6px;
+			font-weight: 500;
+			font-family: var(--font-sans);
+			padding: 4px;
 			border-radius: var(--border-radius-boxy);
 			cursor: pointer;
-			transition: all 0.15s ease;
-			text-transform: uppercase;
+			transition: all 0.1s ease;
 		}
 
 		.range-btn.active {
 			background: var(--bg-surface);
 			color: var(--primary);
 			border: 1px solid var(--border-color);
-			box-shadow: 1px 1px 0px #16161e;
 		}
 
 		/* Show/Hide password toggle icon */
 		.eye-icon {
 			position: absolute;
-			right: 12px;
+			right: 10px;
 			top: 50%;
 			transform: translateY(-50%);
 			cursor: pointer;
 			color: var(--text-secondary);
-			font-size: 13px;
+			font-size: 11px;
 			user-select: none;
 		}
 
@@ -324,135 +341,112 @@
 		.btn-group {
 			display: flex;
 			gap: 8px;
-			margin-top: 12px;
+			margin-top: 10px;
 		}
 
 		/* Styling Suggestions */
 		textarea {
 			resize: none;
-			height: 100px;
+			height: 80px;
 		}
 
 		.suggestion-container {
 			display: flex;
 			flex-wrap: wrap;
-			gap: 6px;
-			margin-top: 8px;
+			gap: 4px;
+			margin-top: 6px;
 		}
 
 		.chip {
-			background: var(--bg-input);
+			background: var(--bg-base);
 			border: 1px solid var(--border-color);
 			color: var(--text-secondary);
-			padding: 5px 10px;
+			padding: 4px 8px;
 			border-radius: var(--border-radius-boxy);
 			font-size: 10.5px;
-			font-family: var(--font-mono);
+			font-family: var(--font-sans);
 			cursor: pointer;
-			transition: all 0.15s ease;
+			transition: all 0.1s ease;
 		}
 
 		.chip:hover {
-			background: var(--bg-card);
+			background: var(--bg-surface);
 			color: var(--primary);
 			border-color: var(--primary);
-			transform: translate(-1px, -1px);
-			box-shadow: 1px 1px 0px #16161e;
 		}
 
 		.chip-special {
-			background: rgba(122, 162, 247, 0.08);
-			border-color: rgba(122, 162, 247, 0.25);
+			background: var(--primary-glow);
+			border-color: var(--primary);
 			color: var(--primary);
+			font-weight: 500;
 		}
 
 		.chip-special:hover {
-			background: rgba(122, 162, 247, 0.15);
-			border-color: var(--primary-hover);
-			color: #fff;
+			background: var(--primary);
+			color: #ffffff;
 		}
 
-		/* Premium Boxy Buttons */
+		/* Premium flat buttons */
 		.btn {
 			width: 100%;
 			background: var(--primary);
-			color: var(--bg-input);
-			border: 1px solid #16161e;
+			color: #ffffff;
+			border: 1px solid transparent;
 			border-radius: var(--border-radius-boxy);
-			padding: 12px;
-			font-weight: 700;
-			font-size: 12px;
-			font-family: var(--font-mono);
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			padding: 8px 12px;
+			font-weight: 600;
+			font-size: 11px;
+			font-family: var(--font-sans);
 			cursor: pointer;
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			gap: 8px;
-			transition: all 0.1s ease;
-			box-shadow: 2px 2px 0px #16161e;
+			gap: 6px;
+			transition: background-color 0.1s ease;
 		}
 
 		.btn:hover {
 			background: var(--primary-hover);
-			transform: translate(-1px, -1px);
-			box-shadow: 3px 3px 0px #16161e;
 		}
 
 		.btn:active {
-			transform: translate(1px, 1px);
-			box-shadow: 1px 1px 0px #16161e;
+			opacity: 0.9;
 		}
 
 		.btn:disabled {
-			background: var(--bg-input);
+			background: var(--bg-base);
 			color: var(--text-muted);
 			border-color: var(--border-color);
-			box-shadow: none;
 			cursor: not-allowed;
-			transform: none !important;
 		}
 
 		.btn-outline {
 			background: transparent;
 			border: 1px solid var(--border-color);
 			color: var(--text-primary);
-			box-shadow: 1px 1px 0px #16161e;
 		}
 
 		.btn-outline:hover {
-			background: var(--bg-input);
+			background: var(--bg-base);
 			border-color: var(--text-secondary);
-			transform: translate(-1px, -1px);
-			box-shadow: 2px 2px 0px #16161e;
-		}
-
-		.btn-outline:active {
-			transform: translate(1px, 1px);
-			box-shadow: 1px 1px 0px #16161e;
 		}
 
 		.btn-outline.active {
-			background: rgba(122, 162, 247, 0.15);
+			background: var(--primary-glow);
 			border-color: var(--primary);
 			color: var(--primary);
-			box-shadow: 2px 2px 0px var(--primary);
 		}
 
 		.btn-danger {
-			background: rgba(247, 118, 142, 0.15);
+			background: transparent;
 			color: var(--error);
-			border: 1px solid rgba(247, 118, 142, 0.3);
-			box-shadow: 1px 1px 0px #16161e;
+			border: 1px solid var(--error);
 		}
 
 		.btn-danger:hover {
 			background: var(--error);
-			color: var(--bg-input);
-			border-color: #16161e;
-			transform: translate(-1px, -1px);
-			box-shadow: 2px 2px 0px #16161e;
+			color: #ffffff;
 		}
 
 		/* Checkpoints Item list styling */
@@ -460,64 +454,59 @@
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			padding: 8px 10px;
-			background: var(--bg-input);
+			padding: 6px 8px;
+			background: var(--bg-base);
 			border: 1px solid var(--border-color);
 			border-radius: var(--border-radius-boxy);
 			font-size: 11px;
-			font-family: var(--font-mono);
-			transition: all 0.15s ease;
+			font-family: var(--font-sans);
 		}
 
 		.checkpoint-item:hover {
-			border-color: var(--primary);
-			transform: translate(-1px, -1px);
-			box-shadow: 1px 1px 0px #16161e;
+			border-color: var(--text-secondary);
 		}
 
 		.checkpoint-restore-btn {
-			background: rgba(122, 162, 247, 0.12);
-			border: 1px solid rgba(122, 162, 247, 0.25);
+			background: var(--primary-glow);
+			border: 1px solid var(--primary);
 			color: var(--primary);
 			padding: 2px 6px;
 			border-radius: var(--border-radius-boxy);
 			font-size: 10px;
 			cursor: pointer;
-			font-weight: 700;
-			font-family: var(--font-mono);
-			transition: all 0.15s ease;
-			text-transform: uppercase;
+			font-weight: 500;
+			font-family: var(--font-sans);
+			transition: all 0.1s ease;
 		}
 
 		.checkpoint-restore-btn:hover {
 			background: var(--primary);
-			color: var(--bg-input);
-			border-color: #16161e;
+			color: #ffffff;
 		}
 
-		/* Real-Time Dev Console */
+		/* Unified Dev Console */
 		.log-header {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			margin-bottom: 8px;
+			margin-bottom: 6px;
 		}
 
 		.log-container {
 			flex: 1;
-			min-height: 120px;
-			max-height: 160px;
+			min-height: 100px;
+			max-height: 140px;
 			overflow-y: auto;
 			font-family: var(--font-mono);
 			font-size: 11px;
 			background: var(--bg-input);
 			border: 1px solid var(--border-color);
 			border-radius: var(--border-radius-boxy);
-			padding: 10px;
+			padding: 8px;
 		}
 
 		.log-entry {
-			margin-bottom: 6px;
+			margin-bottom: 4px;
 			color: var(--text-secondary);
 			line-height: 1.4;
 			border-left: 2px solid var(--border-color);
@@ -531,12 +520,12 @@
 
 		/* Preview / Proposed Changes Panel */
 		.review-item {
-			padding: 10px;
-			background: var(--bg-input);
+			padding: 8px;
+			background: var(--bg-base);
 			border: 1px solid var(--border-color);
 			border-radius: var(--border-radius-boxy);
-			margin-bottom: 8px;
-			font-size: 11.5px;
+			margin-bottom: 6px;
+			font-size: 11px;
 			font-family: var(--font-mono);
 		}
 
@@ -559,24 +548,24 @@
 
 		.badge-action {
 			font-size: 9px;
-			font-weight: 700;
-			padding: 2px 6px;
+			font-weight: 600;
+			padding: 1px 4px;
 			border-radius: var(--border-radius-boxy);
 			text-transform: uppercase;
 			display: inline-block;
 			margin-bottom: 4px;
-			font-family: var(--font-mono);
+			font-family: var(--font-sans);
 		}
 
-		.action-modify { background: rgba(122, 162, 247, 0.15); color: var(--primary); }
-		.action-create { background: rgba(158, 206, 106, 0.15); color: var(--success); }
-		.action-delete { background: rgba(247, 118, 142, 0.15); color: var(--error); }
+		.action-modify { background: rgba(52, 152, 219, 0.12); color: var(--info); }
+		.action-create { background: rgba(46, 204, 113, 0.12); color: var(--success); }
+		.action-delete { background: rgba(231, 76, 60, 0.12); color: var(--error); }
 
 		/* Spinner */
 		.spinner {
-			width: 14px;
-			height: 14px;
-			border: 2px solid rgba(122, 162, 247, 0.2);
+			width: 12px;
+			height: 12px;
+			border: 2px solid rgba(255, 255, 255, 0.2);
 			border-top-color: currentColor;
 			border-radius: 50%;
 			animation: spin 0.8s linear infinite;
@@ -595,10 +584,10 @@
 <body>
 	<div class="header">
 		<div class="logo-container">
-			<div class="logo-title">⚡ Super Editor</div>
+			<div class="logo-title">OneScript</div>
 			<div style="display: flex; gap: 6px; align-items: center;">
-				<button class="tool-icon-btn" id="toolbar-undo" title="Undo (↩️)">↩️</button>
-				<button class="tool-icon-btn" id="toolbar-redo" title="Redo (↪️)">↪️</button>
+				<button class="tool-icon-btn" id="toolbar-undo" title="Undo">↶</button>
+				<button class="tool-icon-btn" id="toolbar-redo" title="Redo">↷</button>
 				<span class="badge">PDK v3</span>
 			</div>
 		</div>
@@ -620,7 +609,7 @@
 					<textarea id="prompt-input" placeholder="Instruct the AI Copilot... (e.g. 'Format headings bold and centered, write a brief introduction paragraph, and delete paragraph #5.')"></textarea>
 				</div>
 				<div class="suggestion-container">
-					<span class="chip chip-special" id="chip-summarize">📝 Summarize Range</span>
+					<span class="chip chip-special" id="chip-summarize">Summarize Range</span>
 					<span class="chip" data-prompt="Reformat the document: Set font to Georgia, headers color to Crimson (#dc2626), and line-spacing to 1.5.">Classic Layout</span>
 					<span class="chip" data-prompt="Insert a clean bulleted list after paragraph #1 with action items: 'Draft brief', 'Schedule sync', 'Execute validation'.">Add Actions</span>
 					<span class="chip" data-prompt="Completely delete paragraph #3 and rewrite paragraph #2 to be much more professional.">Prune & Refine</span>
@@ -685,7 +674,7 @@
 					<label for="api-key">Groq API Key</label>
 					<div class="input-container">
 						<input type="password" id="api-key" placeholder="Enter gsk_..." />
-						<span class="eye-icon" id="toggle-key-visibility">👁️</span>
+						<span class="eye-icon" id="toggle-key-visibility" style="font-size: 10px; font-weight: 600; text-transform: uppercase;">Show</span>
 					</div>
 				</div>
 
@@ -700,7 +689,7 @@
 			<div class="card">
 				<div class="card-title">Session Checkpoints</div>
 				<div style="display: flex; gap: 8px; margin-bottom: 12px;">
-					<button class="btn btn-outline" id="save-checkpoint-btn" style="padding: 10px; font-size: 11.5px; flex: 1;">💾 Save Checkpoint</button>
+					<button class="btn btn-outline" id="save-checkpoint-btn" style="padding: 10px; font-size: 11.5px; flex: 1;">Save Checkpoint</button>
 				</div>
 				<div id="checkpoints-list" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
 					<div style="font-size: 11px; color: var(--text-secondary); text-align: center; padding: 8px;">No checkpoints saved yet.</div>
@@ -720,10 +709,10 @@
 			<!-- AI Pipeline Execution Debugger Panel -->
 			<div class="card" style="border: 1px solid rgba(122, 162, 247, 0.35);">
 				<div class="card-title" style="color: var(--primary); display: flex; align-items: center; justify-content: space-between; gap: 6px;">
-					<span>🔌 AI Pipeline Execution Debugger</span>
+					<span>AI Pipeline Execution Debugger</span>
 					<div style="display: flex; gap: 8px;">
-						<span id="copy-debug-log" style="font-size: 11px; cursor: pointer; user-select: none; color: var(--primary); font-weight: bold; background: rgba(122, 162, 247, 0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(122, 162, 247, 0.35);">📄 Copy Log</span>
-						<span id="clear-debug-log" style="font-size: 11px; cursor: pointer; user-select: none; color: #f7768e; font-weight: bold; background: rgba(247, 118, 142, 0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(247, 118, 142, 0.35);">🧹 Clear</span>
+						<span id="copy-debug-log" style="font-size: 11px; cursor: pointer; user-select: none; color: var(--primary); font-weight: bold; background: rgba(122, 162, 247, 0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(122, 162, 247, 0.35);">Copy Log</span>
+						<span id="clear-debug-log" style="font-size: 11px; cursor: pointer; user-select: none; color: #f7768e; font-weight: bold; background: rgba(247, 118, 142, 0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(247, 118, 142, 0.35);">Clear</span>
 					</div>
 				</div>
 				<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">

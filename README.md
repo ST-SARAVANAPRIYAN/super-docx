@@ -1,14 +1,14 @@
-# super-docx — ONLYOFFICE Plugin
+# OneScript — ONLYOFFICE Plugin
 
 Lightweight ONLYOFFICE plugin for advanced document serialization and styling.
 
-This repository contains the source for the `super-docx` ONLYOFFICE plugin and a packaging script to produce a distributable `.plugin` file.
+This repository contains the source for the `OneScript` ONLYOFFICE plugin and a packaging script to produce a distributable `.plugin` file.
 
 ## Quick overview
 
 - Purpose: provide document serialization, layout inspection, and automated styling helper utilities for ONLYOFFICE.
 - Main plugin files: `plugin/index.html`, `plugin/plugin.js`, `plugin/config.json`.
-- Build: `package.sh` produces `super-docx.plugin`.
+- Build: `package.sh` (Linux/macOS) or `package.bat` (Windows) produces `releases/onescript.plugin`.
 
 ## Repository structure
 
@@ -20,8 +20,10 @@ This repository contains the source for the `super-docx` ONLYOFFICE plugin and a
 │   ├── plugin.js          # Plugin runtime: initialization and handlers
 │   └── resources/         # Icons and static assets
 │       └── img/
-├── package.sh             # Script to generate the .plugin archive
-├── super-docx.plugin      # (generated) packaged plugin for installation
+├── package.sh             # Script to generate the .plugin archive (Linux/macOS)
+├── package.bat            # Script to generate the .plugin archive (Windows)
+├── releases/              # (generated) directory containing built plugin packages
+│   └── onescript.plugin   # packaged plugin for installation
 └── README.md
 ```
 
@@ -53,15 +55,24 @@ To develop and test local changes:
 ## Packaged Production Mode
 
 To bundle the plugin into a distributable file for others:
+
+**On Linux/macOS:**
 ```bash
 ./package.sh
-# This produces super-docx.plugin in the repo root
 ```
-Then, install it in ONLYOFFICE via **Plugin Manager** → **Add** (or **Install from File**).
+
+**On Windows:**
+```cmd
+package.bat
+```
+
+This produces `releases/onescript.plugin`.
+
+Then, install it in ONLYOFFICE via **Plugin Manager** → **Add** (or **Install from File**) and select `releases/onescript.plugin`.
 
 ## Features & Usage
 
-The `super-docx` plugin automatically serializes document structures dynamically.
+The `OneScript` plugin automatically serializes document structures dynamically.
 
 - **Dynamic Range Mode:** Removes the need to manually choose between "Selection Only" or "Entire Doc". If text is highlighted, the plugin automatically parses the selection (mapping the elements back to their absolute indices). If nothing is selected, it falls back to parsing the entire document.
 - **Instant JSON Updates:** The structural JSON parses and compiles in real-time as the cursor or selection moves across the document.
