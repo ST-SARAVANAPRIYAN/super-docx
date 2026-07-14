@@ -28,10 +28,11 @@
 	const clearLogsBtn = document.getElementById('clear-logs');
 	const resetLogsBtn = document.getElementById('reset-logs');
 	
-	const changesCard = document.getElementById('changes-card');
-	const changesList = document.getElementById('changes-list');
-	const confirmBtn = document.getElementById('confirm-btn');
-	const discardBtn = document.getElementById('discard-btn');
+	const chatHistoryContainer = document.getElementById('chat-history');
+	const undoAiBtn = document.getElementById('undo-ai-btn');
+	const contextToolbar = document.getElementById('context-toolbar');
+	let appliedChangesCount = 0;
+	let currentChatProposal = null;
 
 	// Undo / Redo selectors
 	const toolbarUndo = document.getElementById('toolbar-undo');
@@ -45,9 +46,6 @@
 
 	// Summarization elements
 	const chipSummarize = document.getElementById('chip-summarize');
-	const summaryCard = document.getElementById('summary-card');
-	const summaryText = document.getElementById('summary-text');
-	const insertSummaryBtn = document.getElementById('insert-summary-btn');
 	let activeSummaryContent = '';
 
 	// Session Checkpoints elements
@@ -57,6 +55,989 @@
 	let cachedDocData = null;
 	let proposedChanges = null;
 	let checkpoints = [];
+
+	// Chat rendering helper
+	function appendChatMessage(sender, content, type = 'text') {
+		const welcome = chatHistoryContainer.querySelector('.chat-welcome');
+		if (welcome) {
+			welcome.style.display = 'none';
+		}
+
+		const messageDiv = document.createElement('div');
+		messageDiv.className = `chat-message ${sender}`;
+		
+		const header = document.createElement('div');
+		header.className = 'message-header';
+		header.innerText = sender === 'user' ? 'You' : 'OneScript';
+		
+		const body = document.createElement('div');
+		body.className = 'message-body';
+		
+		if (type === 'html') {
+			body.innerHTML = content;
+		} else {
+			body.textContent = content;
+		}
+		
+		messageDiv.appendChild(header);
+		messageDiv.appendChild(body);
+		chatHistoryContainer.appendChild(messageDiv);
+		
+		chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
+		return messageDiv;
+	}
+
+	// Render Proposed Changes Inline
+	function renderChatPreview(aiMessageBody, changes) {
+		aiMessageBody.innerHTML = '';
+		
+		const wrapper = document.createElement('div');
+		wrapper.style.display = 'flex';
+		wrapper.style.flexDirection = 'column';
+		wrapper.style.gap = '8px';
+		wrapper.style.marginTop = '6px';
+		
+		const title = document.createElement('div');
+		title.style.fontWeight = 'bold';
+		title.style.color = 'var(--primary)';
+		title.style.fontSize = '11px';
+		title.innerText = 'Proposed Changes Preview:';
+		wrapper.appendChild(title);
+		
+		const changesListDiv = document.createElement('div');
+		changesListDiv.style.maxHeight = '200px';
+		changesListDiv.style.overflowY = 'auto';
+		changesListDiv.style.display = 'flex';
+		changesListDiv.style.flexDirection = 'column';
+		changesListDiv.style.gap = '6px';
+		
+		changes.forEach((change) => {
+			const original = findElementByIndex(change.targetIndex);
+			if (!original && change.action !== 'createParagraph') return;
+			
+			const item = document.createElement('div');
+			item.style.padding = '6px';
+			item.style.background = 'var(--bg-base)';
+			item.style.border = '1px solid var(--border-color)';
+			item.style.borderRadius = '2px';
+			item.style.fontSize = '10px';
+			
+			let actionBadge = '';
+			if (change.action === 'createParagraph') {
+				actionBadge = '<span class="badge-action action-create" style="font-size: 8px;">Create</span>';
+			} else if (change.action === 'deleteParagraph') {
+				actionBadge = '<span class="badge-action action-delete" style="font-size: 8px;">Delete</span>';
+			} else if (change.action === 'pasteHTML') {
+				actionBadge = '<span class="badge-action action-generate" style="font-size: 8px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);">Generate</span>';
+			} else {
+				actionBadge = '<span class="badge-action action-modify" style="font-size: 8px;">Modify</span>';
+			}
+			
+			let formatStr = '';
+			const props = change.properties || {};
+			if (props.fontName) formatStr += `Font: ${props.fontName}; `;
+			if (props.fontSize) formatStr += `Size: ${props.fontSize/2}pt; `;
+			if (props.bold !== undefined) formatStr += props.bold ? 'Bold; ' : 'Regular; ';
+			if (props.italic !== undefined) formatStr += props.italic ? 'Italic; ' : 'No Italic; ';
+			
+			const originalText = original ? (original.text || `[Table Element at #${change.targetIndex}]`) : '';
+			
+			let diffHTML = '';
+			if (change.action === 'deleteParagraph') {
+				diffHTML = `<div class="diff-original" style="font-size: 9.5px; color: var(--error); text-decoration: line-through;">- "${originalText.substring(0, 50)}${originalText.length > 50 ? '...' : ''}"</div>`;
+			} else if (change.action === 'createParagraph') {
+				diffHTML = `<div class="diff-new" style="font-size: 9.5px; color: var(--success);">+ "${(props.newText || '').substring(0, 50)}"</div>`;
+			} else if (change.action === 'pasteHTML') {
+				diffHTML = `<div class="diff-new" style="font-size: 9.5px; color: #8b5cf6;">✨ Generated Content</div>`;
+			} else {
+				if (props.newText !== undefined && props.newText !== originalText) {
+					diffHTML = `
+						<div class="diff-original" style="font-size: 9.5px; color: var(--error); text-decoration: line-through;">- "${originalText.substring(0, 40)}"</div>
+						<div class="diff-new" style="font-size: 9.5px; color: var(--success);">+ "${props.newText.substring(0, 40)}"</div>
+					`;
+				} else if (originalText) {
+					diffHTML = `<div style="font-size: 9.5px; color: var(--text-secondary); font-style: italic;">"${originalText.substring(0, 50)}..."</div>`;
+				}
+			}
+			
+			item.innerHTML = `
+				<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+					<span style="font-weight: bold;">Element #${change.targetIndex + 1}</span>
+					${actionBadge}
+				</div>
+				${diffHTML}
+				${formatStr ? `<div style="font-size: 9px; color: var(--primary); margin-top: 2px;">Styles: ${formatStr}</div>` : ''}
+			`;
+			changesListDiv.appendChild(item);
+		});
+		
+		wrapper.appendChild(changesListDiv);
+		
+		const btnGroup = document.createElement('div');
+		btnGroup.style.display = 'flex';
+		btnGroup.style.gap = '6px';
+		btnGroup.style.marginTop = '6px';
+		
+		const acceptBtn = document.createElement('button');
+		acceptBtn.className = 'btn';
+		acceptBtn.innerText = 'Accept & Apply';
+		acceptBtn.style.flex = '1.2';
+		acceptBtn.style.fontSize = '10px';
+		acceptBtn.style.padding = '6px';
+		acceptBtn.style.background = 'var(--success)';
+		
+		const discardBtn = document.createElement('button');
+		discardBtn.className = 'btn btn-outline btn-danger';
+		discardBtn.innerText = 'Discard';
+		discardBtn.style.flex = '0.8';
+		discardBtn.style.fontSize = '10px';
+		discardBtn.style.padding = '6px';
+		
+		btnGroup.appendChild(acceptBtn);
+		btnGroup.appendChild(discardBtn);
+		wrapper.appendChild(btnGroup);
+		
+		aiMessageBody.appendChild(wrapper);
+		
+		return new Promise((resolve) => {
+			acceptBtn.addEventListener('click', () => {
+				acceptBtn.disabled = true;
+				discardBtn.disabled = true;
+				acceptBtn.innerText = 'Applying...';
+				resolve('accept');
+			});
+			
+			discardBtn.addEventListener('click', () => {
+				acceptBtn.disabled = true;
+				discardBtn.disabled = true;
+				wrapper.innerHTML = '<div style="color: var(--text-muted); font-style: italic; margin-top: 4px;">Proposed changes discarded.</div>';
+				resolve('discard');
+			});
+		});
+	}
+
+	// Render Executive Summary Inline
+	function renderSummaryInMessage(aiMessageBody, summaryContent) {
+		aiMessageBody.innerHTML = '';
+		
+		const wrapper = document.createElement('div');
+		wrapper.style.display = 'flex';
+		wrapper.style.flexDirection = 'column';
+		wrapper.style.gap = '8px';
+		wrapper.style.marginTop = '6px';
+		
+		const title = document.createElement('div');
+		title.style.fontWeight = 'bold';
+		title.style.color = 'var(--primary)';
+		title.style.fontSize = '11px';
+		title.innerText = 'AI Executive Summary:';
+		wrapper.appendChild(title);
+		
+		const textDiv = document.createElement('div');
+		textDiv.style.fontSize = '11px';
+		textDiv.style.lineHeight = '1.5';
+		textDiv.innerText = summaryContent;
+		wrapper.appendChild(textDiv);
+		
+		const insertBtn = document.createElement('button');
+		insertBtn.className = 'btn';
+		insertBtn.innerText = 'Insert Summary at Cursor';
+		insertBtn.style.fontSize = '10px';
+		insertBtn.style.padding = '6px';
+		insertBtn.style.background = 'var(--info)';
+		
+		wrapper.appendChild(insertBtn);
+		aiMessageBody.appendChild(wrapper);
+		
+		insertBtn.addEventListener('click', () => {
+			insertBtn.disabled = true;
+			insertBtn.innerText = 'Inserting...';
+			
+			window.Asc.scope.summaryText = "\n\n" + summaryContent + "\n\n";
+			window.Asc.plugin.callCommand(function() {
+				var oDocument = Api.GetDocument();
+				var oParagraph = Api.CreateParagraph();
+				oParagraph.AddText(Asc.scope.summaryText);
+				oDocument.InsertContent([oParagraph]);
+				return "success";
+			}, false, true, function(res) {
+				insertBtn.innerText = 'Inserted ✓';
+				log("Summary successfully inserted into document!", "success");
+			});
+		});
+	}
+
+	// Detect selection type and active properties
+	function detectSelectionType() {
+		return new Promise((resolve) => {
+			window.Asc.plugin.callCommand(function() {
+				var result = { type: "text", properties: {} };
+				try {
+					var oDocument = Api.GetDocument();
+					var oRange = oDocument.GetRangeBySelect();
+					if (oRange) {
+						var pList = oRange.GetAllParagraphs();
+						if (pList && pList.length > 0) {
+							if (pList[0].GetParentTable() !== null) {
+								result.type = "table";
+								return result;
+							}
+						}
+						
+						// Extract text formatting properties
+						var fontName = "Calibri";
+						var fontSize = 11;
+						var bold = false;
+						var italic = false;
+						var underline = false;
+						var strikeout = false;
+						var color = "#000000";
+						var shading = "#ffffff";
+						
+						if (pList && pList.length > 0) {
+							var p = pList[0];
+							var runCount = p.GetElementsCount();
+							if (runCount > 0) {
+								var firstRun = p.GetElement(0);
+								if (firstRun) {
+									try { fontName = firstRun.GetFontName() || fontName; } catch(e) {}
+									try { fontSize = (firstRun.GetFontSize() || 22) / 2; } catch(e) {}
+									try { bold = !!firstRun.GetBold(); } catch(e) {}
+									try { italic = !!firstRun.GetItalic(); } catch(e) {}
+									try { underline = !!firstRun.GetUnderline(); } catch(e) {}
+									try { strikeout = !!firstRun.GetStrikeout(); } catch(e) {}
+									try {
+										var c = firstRun.GetColor();
+										if (c && c.GetHex) color = c.GetHex() || color;
+									} catch(e) {}
+								}
+							}
+							try {
+								var pPr = p.GetParaPr();
+								if (pPr && pPr.GetShd) {
+									var sd = pPr.GetShd();
+									if (sd) {
+										if (typeof sd === "string") shading = sd;
+										else if (sd.GetHex) shading = sd.GetHex() || shading;
+									}
+								}
+							} catch(e) {}
+						}
+						result.properties = {
+							fontName: fontName,
+							fontSize: fontSize,
+							bold: bold,
+							italic: italic,
+							underline: underline,
+							strikeout: strikeout,
+							color: color,
+							shading: shading
+						};
+					}
+				} catch(e) {}
+				
+				if (result.type === "text") {
+					try {
+						var oSelection = Api.GetSelection();
+						if (oSelection) {
+							var classType = oSelection.GetClassType();
+							if (classType === "image" || classType === "ApiImage") {
+								result.type = "image";
+							} else if (classType === "shape" || classType === "ApiShape") {
+								result.type = "shape";
+								try {
+									var fill = oSelection.GetFill();
+									if (fill && fill.GetColor) result.properties.fill = fill.GetColor().GetHex();
+									var outline = oSelection.GetOutline();
+									if (outline && outline.GetColor) result.properties.outline = outline.GetColor().GetHex();
+								} catch(e) {}
+							} else if (classType === "chart" || classType === "ApiChart") {
+								result.type = "chart";
+							} else if (classType === "drawing" || classType === "ApiDrawing") {
+								result.type = "shape";
+							}
+						}
+					} catch(e) {}
+				}
+				return result;
+			}, false, true, function(result) {
+				if (!result || result.type === "none") {
+					window.Asc.plugin.executeMethod("GetSelectionType", [], function(type) {
+						if (type === "drawing") {
+							resolve({ type: "image", properties: {} });
+						} else {
+							resolve({ type: "text", properties: {} });
+						}
+					});
+				} else {
+					resolve(result);
+				}
+			});
+		});
+	}
+
+	// Render Contextual ONLYOFFICE Toolbar
+	function renderContextToolbar(type, props = {}) {
+		if (!contextToolbar) return;
+		if (type === "none" || !type) {
+			contextToolbar.style.display = "none";
+			return;
+		}
+		contextToolbar.style.display = "block";
+		
+		let html = "";
+		if (type === "text") {
+			html = `
+				<div style="display: flex; flex-direction: column; gap: 6px;">
+					<div style="display: flex; gap: 4px; align-items: center; justify-content: space-between;">
+						<span style="font-weight: bold; font-size: 9px; text-transform: uppercase; color: var(--text-secondary);">Text Formatting</span>
+						<span class="badge" style="font-size: 8px;">Text</span>
+					</div>
+					<div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+						<button class="tool-icon-btn ${props.bold ? 'active' : ''}" id="toolbar-bold" title="Bold" style="font-weight: bold;">B</button>
+						<button class="tool-icon-btn ${props.italic ? 'active' : ''}" id="toolbar-italic" title="Italic" style="font-style: italic;">I</button>
+						<button class="tool-icon-btn ${props.underline ? 'active' : ''}" id="toolbar-underline" title="Underline" style="text-decoration: underline;">U</button>
+						<button class="tool-icon-btn ${props.strikeout ? 'active' : ''}" id="toolbar-strikeout" title="Strikeout" style="text-decoration: line-through;">S</button>
+						
+						<div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 2px;"></div>
+						
+						<button class="tool-icon-btn" id="toolbar-align-left" title="Align Left">L</button>
+						<button class="tool-icon-btn" id="toolbar-align-center" title="Align Center">C</button>
+						<button class="tool-icon-btn" id="toolbar-align-right" title="Align Right">R</button>
+						<button class="tool-icon-btn" id="toolbar-align-justify" title="Justify">J</button>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center;">
+						<select id="toolbar-font-family" style="flex: 1.5; height: 22px; padding: 2px 4px; font-size: 10px;">
+							<option value="Calibri" ${props.fontName === 'Calibri' ? 'selected' : ''}>Calibri</option>
+							<option value="Arial" ${props.fontName === 'Arial' ? 'selected' : ''}>Arial</option>
+							<option value="Times New Roman" ${props.fontName === 'Times New Roman' ? 'selected' : ''}>Times New Roman</option>
+							<option value="Georgia" ${props.fontName === 'Georgia' ? 'selected' : ''}>Georgia</option>
+							<option value="Courier New" ${props.fontName === 'Courier New' ? 'selected' : ''}>Courier New</option>
+						</select>
+						
+						<select id="toolbar-font-size" style="flex: 1; height: 22px; padding: 2px 4px; font-size: 10px;">
+							${[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48].map(s => `
+								<option value="${s}" ${Math.round(props.fontSize) === s ? 'selected' : ''}>${s}pt</option>
+							`).join('')}
+						</select>
+						
+						<input type="color" id="toolbar-font-color" value="${props.color || '#000000'}" title="Text Color" style="width: 22px; height: 22px; padding: 0; border: 1px solid var(--border-color); cursor: pointer; background: none;">
+						<input type="color" id="toolbar-shading-color" value="${props.shading || '#ffffff'}" title="Background Color" style="width: 22px; height: 22px; padding: 0; border: 1px solid var(--border-color); cursor: pointer; background: none;">
+					</div>
+				</div>
+			`;
+		} else if (type === "table") {
+			html = `
+				<div style="display: flex; flex-direction: column; gap: 6px;">
+					<div style="display: flex; gap: 4px; align-items: center; justify-content: space-between;">
+						<span style="font-weight: bold; font-size: 9px; text-transform: uppercase; color: var(--text-secondary);">Table Tools</span>
+						<span class="badge" style="font-size: 8px; color: var(--accent-purple); border-color: var(--accent-purple);">Table</span>
+					</div>
+					<div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+						<button class="btn btn-outline" id="toolbar-table-row-above" style="font-size: 9px; padding: 4px; flex: 1; height: 22px;">+ Row Above</button>
+						<button class="btn btn-outline" id="toolbar-table-row-below" style="font-size: 9px; padding: 4px; flex: 1; height: 22px;">+ Row Below</button>
+					</div>
+					<div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+						<button class="btn btn-outline" id="toolbar-table-col-left" style="font-size: 9px; padding: 4px; flex: 1; height: 22px;">+ Col Left</button>
+						<button class="btn btn-outline" id="toolbar-table-col-right" style="font-size: 9px; padding: 4px; flex: 1; height: 22px;">+ Col Right</button>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center;">
+						<button class="btn btn-danger" id="toolbar-table-delete-row" style="font-size: 9px; padding: 4px; flex: 1; height: 22px;">Del Row</button>
+						<button class="btn btn-danger" id="toolbar-table-delete-col" style="font-size: 9px; padding: 4px; flex: 1; height: 22px;">Del Col</button>
+						<div style="display: flex; align-items: center; gap: 4px; flex: 1; justify-content: flex-end;">
+							<span style="font-size: 9px; color: var(--text-secondary);">Bg:</span>
+							<input type="color" id="toolbar-table-shading" value="#ffffff" title="Cell Shading" style="width: 22px; height: 22px; padding: 0; border: 1px solid var(--border-color); cursor: pointer; background: none;">
+						</div>
+					</div>
+				</div>
+			`;
+		} else if (type === "image") {
+			html = `
+				<div style="display: flex; flex-direction: column; gap: 6px;">
+					<div style="display: flex; gap: 4px; align-items: center; justify-content: space-between;">
+						<span style="font-weight: bold; font-size: 9px; text-transform: uppercase; color: var(--text-secondary);">Image Settings</span>
+						<span class="badge" style="font-size: 8px; color: var(--success); border-color: var(--success);">Image</span>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center;">
+						<div style="display: flex; align-items: center; gap: 2px; flex: 1;">
+							<span style="font-size: 9px; color: var(--text-secondary);">W (mm):</span>
+							<input type="text" id="toolbar-img-width" value="${props.width || '100'}" style="height: 20px; width: 36px; font-size: 9px; padding: 2px; text-align: center; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+						</div>
+						<div style="display: flex; align-items: center; gap: 2px; flex: 1;">
+							<span style="font-size: 9px; color: var(--text-secondary);">H (mm):</span>
+							<input type="text" id="toolbar-img-height" value="${props.height || '80'}" style="height: 20px; width: 36px; font-size: 9px; padding: 2px; text-align: center; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+						</div>
+						<button class="btn" id="toolbar-img-apply-size" style="font-size: 9px; padding: 2px 6px; height: 20px; width: auto;">Set</button>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center;">
+						<button class="btn btn-outline" id="toolbar-img-rotate" style="font-size: 9px; padding: 4px; flex: 1; height: 22px;">Rotate 90°</button>
+					</div>
+				</div>
+			`;
+		} else if (type === "shape") {
+			html = `
+				<div style="display: flex; flex-direction: column; gap: 6px;">
+					<div style="display: flex; gap: 4px; align-items: center; justify-content: space-between;">
+						<span style="font-weight: bold; font-size: 9px; text-transform: uppercase; color: var(--text-secondary);">Shape Format</span>
+						<span class="badge" style="font-size: 8px; color: var(--info); border-color: var(--info);">Shape</span>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center; justify-content: space-between;">
+						<div style="display: flex; align-items: center; gap: 4px;">
+							<span style="font-size: 9px; color: var(--text-secondary);">Fill:</span>
+							<input type="color" id="toolbar-shape-fill" value="${props.fill || '#3498db'}" title="Fill Color" style="width: 20px; height: 20px; padding: 0; border: 1px solid var(--border-color); cursor: pointer; background: none;">
+						</div>
+						<div style="display: flex; align-items: center; gap: 4px;">
+							<span style="font-size: 9px; color: var(--text-secondary);">Line:</span>
+							<input type="color" id="toolbar-shape-outline" value="${props.outline || '#000000'}" title="Outline Color" style="width: 20px; height: 20px; padding: 0; border: 1px solid var(--border-color); cursor: pointer; background: none;">
+						</div>
+						<div style="display: flex; align-items: center; gap: 2px;">
+							<span style="font-size: 9px; color: var(--text-secondary);">Wt:</span>
+							<select id="toolbar-shape-weight" style="height: 20px; font-size: 9px; padding: 0 2px;">
+								<option value="1" ${props.weight === 1 ? 'selected' : ''}>1pt</option>
+								<option value="2" ${props.weight === 2 ? 'selected' : ''}>2pt</option>
+								<option value="3" ${props.weight === 3 ? 'selected' : ''}>3pt</option>
+								<option value="5" ${props.weight === 5 ? 'selected' : ''}>5pt</option>
+							</select>
+						</div>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center;">
+						<div style="display: flex; align-items: center; gap: 2px; flex: 1;">
+							<span style="font-size: 9px; color: var(--text-secondary);">W (mm):</span>
+							<input type="text" id="toolbar-shape-width" value="${props.width || '50'}" style="height: 20px; width: 36px; font-size: 9px; padding: 2px; text-align: center; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+						</div>
+						<div style="display: flex; align-items: center; gap: 2px; flex: 1;">
+							<span style="font-size: 9px; color: var(--text-secondary);">H (mm):</span>
+							<input type="text" id="toolbar-shape-height" value="${props.height || '50'}" style="height: 20px; width: 36px; font-size: 9px; padding: 2px; text-align: center; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+						</div>
+						<button class="btn" id="toolbar-shape-apply" style="font-size: 9px; padding: 2px 6px; height: 20px; width: auto;">Set</button>
+					</div>
+				</div>
+			`;
+		} else if (type === "chart") {
+			html = `
+				<div style="display: flex; flex-direction: column; gap: 6px;">
+					<div style="display: flex; gap: 4px; align-items: center; justify-content: space-between;">
+						<span style="font-weight: bold; font-size: 9px; text-transform: uppercase; color: var(--text-secondary);">Chart Editor</span>
+						<span class="badge" style="font-size: 8px; color: var(--primary); border-color: var(--primary);">Chart</span>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center;">
+						<span style="font-size: 9px; color: var(--text-secondary); flex-shrink: 0;">Title:</span>
+						<input type="text" id="toolbar-chart-title" value="${props.title || ''}" placeholder="Chart Title..." style="flex: 1; height: 22px; font-size: 10px; padding: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+						<button class="btn btn-outline" id="toolbar-chart-apply-title" style="font-size: 9px; padding: 2px 6px; height: 22px; width: auto;">Set</button>
+					</div>
+					<div style="display: flex; gap: 4px; align-items: center;">
+						<div style="display: flex; align-items: center; gap: 2px; flex: 1;">
+							<span style="font-size: 9px; color: var(--text-secondary);">W (mm):</span>
+							<input type="text" id="toolbar-chart-width" value="${props.width || '120'}" style="height: 20px; width: 36px; font-size: 9px; padding: 2px; text-align: center; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+						</div>
+						<div style="display: flex; align-items: center; gap: 2px; flex: 1;">
+							<span style="font-size: 9px; color: var(--text-secondary);">H (mm):</span>
+							<input type="text" id="toolbar-chart-height" value="${props.height || '90'}" style="height: 20px; width: 36px; font-size: 9px; padding: 2px; text-align: center; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+						</div>
+						<button class="btn" id="toolbar-chart-apply-size" style="font-size: 9px; padding: 2px 6px; height: 20px; width: auto;">Set</button>
+					</div>
+				</div>
+			`;
+		}
+		
+		contextToolbar.innerHTML = html;
+		bindToolbarListeners(type);
+	}
+
+	// Helper to bind toolbar click / select events
+	function bindToolbarListeners(type) {
+		if (type === "text") {
+			const runTextCmd = (fn) => {
+				window.Asc.plugin.callCommand(fn, false, true, () => {
+					debouncedRefresh();
+				});
+			};
+
+			document.getElementById("toolbar-bold").addEventListener("click", () => {
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) oRange.SetBold(!oRange.GetBold());
+				});
+			});
+
+			document.getElementById("toolbar-italic").addEventListener("click", () => {
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) oRange.SetItalic(!oRange.GetItalic());
+				});
+			});
+
+			document.getElementById("toolbar-underline").addEventListener("click", () => {
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) oRange.SetUnderline(!oRange.GetUnderline());
+				});
+			});
+
+			document.getElementById("toolbar-strikeout").addEventListener("click", () => {
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) oRange.SetStrikeout(!oRange.GetStrikeout());
+				});
+			});
+
+			const setAlign = (jc) => {
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) {
+						var pList = oRange.GetAllParagraphs();
+						for (var i = 0; i < pList.length; i++) {
+							pList[i].SetJc(Asc.scope.jc);
+						}
+					}
+				});
+			};
+
+			document.getElementById("toolbar-align-left").addEventListener("click", () => {
+				window.Asc.scope.jc = "left";
+				setAlign("left");
+			});
+			document.getElementById("toolbar-align-center").addEventListener("click", () => {
+				window.Asc.scope.jc = "center";
+				setAlign("center");
+			});
+			document.getElementById("toolbar-align-right").addEventListener("click", () => {
+				window.Asc.scope.jc = "right";
+				setAlign("right");
+			});
+			document.getElementById("toolbar-align-justify").addEventListener("click", () => {
+				window.Asc.scope.jc = "both";
+				setAlign("both");
+			});
+
+			document.getElementById("toolbar-font-family").addEventListener("change", (e) => {
+				window.Asc.scope.fontName = e.target.value;
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) oRange.SetFontName(Asc.scope.fontName);
+				});
+			});
+
+			document.getElementById("toolbar-font-size").addEventListener("change", (e) => {
+				window.Asc.scope.fontSize = parseInt(e.target.value) * 2;
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) oRange.SetFontSize(Asc.scope.fontSize);
+				});
+			});
+
+			document.getElementById("toolbar-font-color").addEventListener("change", (e) => {
+				const hex = e.target.value.replace('#', '');
+				window.Asc.scope.r = parseInt(hex.substring(0, 2), 16);
+				window.Asc.scope.g = parseInt(hex.substring(2, 4), 16);
+				window.Asc.scope.b = parseInt(hex.substring(4, 6), 16);
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) oRange.SetColor(Asc.scope.r, Asc.scope.g, Asc.scope.b);
+				});
+			});
+
+			document.getElementById("toolbar-shading-color").addEventListener("change", (e) => {
+				const hex = e.target.value.replace('#', '');
+				window.Asc.scope.r = parseInt(hex.substring(0, 2), 16);
+				window.Asc.scope.g = parseInt(hex.substring(2, 4), 16);
+				window.Asc.scope.b = parseInt(hex.substring(4, 6), 16);
+				runTextCmd(function() {
+					var oRange = Api.GetDocument().GetRangeBySelect();
+					if (oRange) {
+						var pList = oRange.GetAllParagraphs();
+						for (var i = 0; i < pList.length; i++) {
+							pList[i].SetShd(Asc.scope.r, Asc.scope.g, Asc.scope.b);
+						}
+					}
+				});
+			});
+
+		} else if (type === "table") {
+			const runTableCmd = (fn) => {
+				window.Asc.plugin.callCommand(fn, false, true, () => {
+					debouncedRefresh();
+				});
+			};
+
+			document.getElementById("toolbar-table-row-above").addEventListener("click", () => {
+				runTableCmd(function() {
+					var getActiveCellAndTable = function() {
+						var r = Api.GetDocument().GetRangeBySelect();
+						if (!r) return null;
+						var p = r.GetAllParagraphs();
+						if (!p || !p.length) return null;
+						var t = p[0].GetParentTable();
+						if (!t) return null;
+						for (var rIdx = 0; rIdx < t.GetRowsCount(); rIdx++) {
+							var row = t.GetRow(rIdx);
+							for (var cIdx = 0; cIdx < row.GetCellsCount(); cIdx++) {
+								var cell = row.GetCell(cIdx);
+								var paras = cell.GetContent().GetAllParagraphs();
+								for (var cp = 0; cp < paras.length; cp++) {
+									if (paras[cp] === p[0]) return { table: t, cell: cell, pList: p };
+								}
+							}
+						}
+						return null;
+					};
+					var res = getActiveCellAndTable();
+					if (res && res.cell) {
+						res.table.AddRow(res.cell, true);
+					}
+				});
+			});
+
+			document.getElementById("toolbar-table-row-below").addEventListener("click", () => {
+				runTableCmd(function() {
+					var getActiveCellAndTable = function() {
+						var r = Api.GetDocument().GetRangeBySelect();
+						if (!r) return null;
+						var p = r.GetAllParagraphs();
+						if (!p || !p.length) return null;
+						var t = p[0].GetParentTable();
+						if (!t) return null;
+						for (var rIdx = 0; rIdx < t.GetRowsCount(); rIdx++) {
+							var row = t.GetRow(rIdx);
+							for (var cIdx = 0; cIdx < row.GetCellsCount(); cIdx++) {
+								var cell = row.GetCell(cIdx);
+								var paras = cell.GetContent().GetAllParagraphs();
+								for (var cp = 0; cp < paras.length; cp++) {
+									if (paras[cp] === p[0]) return { table: t, cell: cell, pList: p };
+								}
+							}
+						}
+						return null;
+					};
+					var res = getActiveCellAndTable();
+					if (res && res.cell) {
+						res.table.AddRow(res.cell, false);
+					}
+				});
+			});
+
+			document.getElementById("toolbar-table-col-left").addEventListener("click", () => {
+				runTableCmd(function() {
+					var getActiveCellAndTable = function() {
+						var r = Api.GetDocument().GetRangeBySelect();
+						if (!r) return null;
+						var p = r.GetAllParagraphs();
+						if (!p || !p.length) return null;
+						var t = p[0].GetParentTable();
+						if (!t) return null;
+						for (var rIdx = 0; rIdx < t.GetRowsCount(); rIdx++) {
+							var row = t.GetRow(rIdx);
+							for (var cIdx = 0; cIdx < row.GetCellsCount(); cIdx++) {
+								var cell = row.GetCell(cIdx);
+								var paras = cell.GetContent().GetAllParagraphs();
+								for (var cp = 0; cp < paras.length; cp++) {
+									if (paras[cp] === p[0]) return { table: t, cell: cell, pList: p };
+								}
+							}
+						}
+						return null;
+					};
+					var res = getActiveCellAndTable();
+					if (res && res.cell) {
+						res.table.AddColumn(res.cell, true);
+					}
+				});
+			});
+
+			document.getElementById("toolbar-table-col-right").addEventListener("click", () => {
+				runTableCmd(function() {
+					var getActiveCellAndTable = function() {
+						var r = Api.GetDocument().GetRangeBySelect();
+						if (!r) return null;
+						var p = r.GetAllParagraphs();
+						if (!p || !p.length) return null;
+						var t = p[0].GetParentTable();
+						if (!t) return null;
+						for (var rIdx = 0; rIdx < t.GetRowsCount(); rIdx++) {
+							var row = t.GetRow(rIdx);
+							for (var cIdx = 0; cIdx < row.GetCellsCount(); cIdx++) {
+								var cell = row.GetCell(cIdx);
+								var paras = cell.GetContent().GetAllParagraphs();
+								for (var cp = 0; cp < paras.length; cp++) {
+									if (paras[cp] === p[0]) return { table: t, cell: cell, pList: p };
+								}
+							}
+						}
+						return null;
+					};
+					var res = getActiveCellAndTable();
+					if (res && res.cell) {
+						res.table.AddColumn(res.cell, false);
+					}
+				});
+			});
+
+			document.getElementById("toolbar-table-delete-row").addEventListener("click", () => {
+				runTableCmd(function() {
+					var getActiveCellAndTable = function() {
+						var r = Api.GetDocument().GetRangeBySelect();
+						if (!r) return null;
+						var p = r.GetAllParagraphs();
+						if (!p || !p.length) return null;
+						var t = p[0].GetParentTable();
+						if (!t) return null;
+						for (var rIdx = 0; rIdx < t.GetRowsCount(); rIdx++) {
+							var row = t.GetRow(rIdx);
+							for (var cIdx = 0; cIdx < row.GetCellsCount(); cIdx++) {
+								var cell = row.GetCell(cIdx);
+								var paras = cell.GetContent().GetAllParagraphs();
+								for (var cp = 0; cp < paras.length; cp++) {
+									if (paras[cp] === p[0]) return { table: t, cell: cell, pList: p };
+								}
+							}
+						}
+						return null;
+					};
+					var res = getActiveCellAndTable();
+					if (res && res.cell) {
+						var table = res.table;
+						var activeRowIndex = -1;
+						var rowsCount = table.GetRowsCount();
+						for (var r = 0; r < rowsCount; r++) {
+							var row = table.GetRow(r);
+							var cellsCount = row.GetCellsCount();
+							for (var c = 0; c < cellsCount; c++) {
+								if (row.GetCell(c) === res.cell) {
+									activeRowIndex = r;
+									break;
+								}
+							}
+							if (activeRowIndex !== -1) break;
+						}
+						if (activeRowIndex !== -1) {
+							table.RemoveRow(activeRowIndex);
+						}
+					}
+				});
+			});
+
+			document.getElementById("toolbar-table-delete-col").addEventListener("click", () => {
+				runTableCmd(function() {
+					var getActiveCellAndTable = function() {
+						var r = Api.GetDocument().GetRangeBySelect();
+						if (!r) return null;
+						var p = r.GetAllParagraphs();
+						if (!p || !p.length) return null;
+						var t = p[0].GetParentTable();
+						if (!t) return null;
+						for (var rIdx = 0; rIdx < t.GetRowsCount(); rIdx++) {
+							var row = t.GetRow(rIdx);
+							for (var cIdx = 0; cIdx < row.GetCellsCount(); cIdx++) {
+								var cell = row.GetCell(cIdx);
+								var paras = cell.GetContent().GetAllParagraphs();
+								for (var cp = 0; cp < paras.length; cp++) {
+									if (paras[cp] === p[0]) return { table: t, cell: cell, pList: p };
+								}
+							}
+						}
+						return null;
+					};
+					var res = getActiveCellAndTable();
+					if (res && res.cell) {
+						res.cell.RemoveColumn();
+					}
+				});
+			});
+
+			document.getElementById("toolbar-table-shading").addEventListener("change", (e) => {
+				const hex = e.target.value.replace('#', '');
+				window.Asc.scope.r = parseInt(hex.substring(0, 2), 16);
+				window.Asc.scope.g = parseInt(hex.substring(2, 4), 16);
+				window.Asc.scope.b = parseInt(hex.substring(4, 6), 16);
+				runTableCmd(function() {
+					var getActiveCellAndTable = function() {
+						var r = Api.GetDocument().GetRangeBySelect();
+						if (!r) return null;
+						var p = r.GetAllParagraphs();
+						if (!p || !p.length) return null;
+						var t = p[0].GetParentTable();
+						if (!t) return null;
+						for (var rIdx = 0; rIdx < t.GetRowsCount(); rIdx++) {
+							var row = t.GetRow(rIdx);
+							for (var cIdx = 0; cIdx < row.GetCellsCount(); cIdx++) {
+								var cell = row.GetCell(cIdx);
+								var paras = cell.GetContent().GetAllParagraphs();
+								for (var cp = 0; cp < paras.length; cp++) {
+									if (paras[cp] === p[0]) return { table: t, cell: cell, pList: p };
+								}
+							}
+						}
+						return null;
+					};
+					var res = getActiveCellAndTable();
+					if (res && res.table) {
+						var colorObj = Api.CreateColorFromRGB(Asc.scope.r, Asc.scope.g, Asc.scope.b);
+						var rowsCount = res.table.GetRowsCount();
+						for (var rowIdx = 0; rowIdx < rowsCount; rowIdx++) {
+							var row = res.table.GetRow(rowIdx);
+							var cellsCount = row.GetCellsCount();
+							for (var colIdx = 0; colIdx < cellsCount; colIdx++) {
+								var cell = row.GetCell(colIdx);
+								var cellParas = cell.GetContent().GetAllParagraphs();
+								var isCellSelected = false;
+								for (var cp = 0; cp < cellParas.length; cp++) {
+									for (var sp = 0; sp < res.pList.length; sp++) {
+										if (cellParas[cp] === res.pList[sp]) {
+											isCellSelected = true;
+											break;
+										}
+									}
+									if (isCellSelected) break;
+								}
+								if (isCellSelected) {
+									cell.SetBackgroundColor(colorObj);
+								}
+							}
+						}
+					}
+				});
+			});
+
+		} else if (type === "image") {
+			document.getElementById("toolbar-img-apply-size").addEventListener("click", () => {
+				const w = parseFloat(document.getElementById("toolbar-img-width").value);
+				const h = parseFloat(document.getElementById("toolbar-img-height").value);
+				if (isNaN(w) || isNaN(h)) return;
+				
+				window.Asc.scope.width = w * 36000;
+				window.Asc.scope.height = h * 36000;
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						try { oSelection.SetSize(Asc.scope.width, Asc.scope.height); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+
+			document.getElementById("toolbar-img-rotate").addEventListener("click", () => {
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						var r = 0;
+						try { r = oSelection.GetRotation() || 0; } catch(e) {}
+						try { oSelection.SetRotation((r + 90) % 360); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+
+		} else if (type === "shape") {
+			document.getElementById("toolbar-shape-fill").addEventListener("change", (e) => {
+				const hex = e.target.value.replace('#', '');
+				window.Asc.scope.r = parseInt(hex.substring(0, 2), 16);
+				window.Asc.scope.g = parseInt(hex.substring(2, 4), 16);
+				window.Asc.scope.b = parseInt(hex.substring(4, 6), 16);
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						var colorObj = Api.CreateColorFromRGB(Asc.scope.r, Asc.scope.g, Asc.scope.b);
+						var fill = Api.CreateSolidFill(colorObj);
+						try { oSelection.SetFill(fill); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+
+			document.getElementById("toolbar-shape-outline").addEventListener("change", (e) => {
+				const hex = e.target.value.replace('#', '');
+				window.Asc.scope.r = parseInt(hex.substring(0, 2), 16);
+				window.Asc.scope.g = parseInt(hex.substring(2, 4), 16);
+				window.Asc.scope.b = parseInt(hex.substring(4, 6), 16);
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						var colorObj = Api.CreateColorFromRGB(Asc.scope.r, Asc.scope.g, Asc.scope.b);
+						var stroke = Api.CreateStroke(12700, Api.CreateSolidFill(colorObj));
+						try { oSelection.SetOutline(stroke); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+
+			document.getElementById("toolbar-shape-weight").addEventListener("change", (e) => {
+				window.Asc.scope.weight = parseFloat(e.target.value) * 12700;
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						var stroke = Api.CreateStroke(Asc.scope.weight);
+						try { oSelection.SetOutline(stroke); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+
+			document.getElementById("toolbar-shape-apply").addEventListener("click", () => {
+				const w = parseFloat(document.getElementById("toolbar-shape-width").value);
+				const h = parseFloat(document.getElementById("toolbar-shape-height").value);
+				if (isNaN(w) || isNaN(h)) return;
+				
+				window.Asc.scope.width = w * 36000;
+				window.Asc.scope.height = h * 36000;
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						try { oSelection.SetSize(Asc.scope.width, Asc.scope.height); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+
+		} else if (type === "chart") {
+			document.getElementById("toolbar-chart-apply-title").addEventListener("click", () => {
+				window.Asc.scope.title = document.getElementById("toolbar-chart-title").value;
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						try { oSelection.SetTitle(Asc.scope.title, 24); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+
+			document.getElementById("toolbar-chart-apply-size").addEventListener("click", () => {
+				const w = parseFloat(document.getElementById("toolbar-chart-width").value);
+				const h = parseFloat(document.getElementById("toolbar-chart-height").value);
+				if (isNaN(w) || isNaN(h)) return;
+				
+				window.Asc.scope.width = w * 36000;
+				window.Asc.scope.height = h * 36000;
+				window.Asc.plugin.callCommand(function() {
+					var oSelection = Api.GetSelection();
+					if (oSelection) {
+						try { oSelection.SetSize(Asc.scope.width, Asc.scope.height); } catch(e) {}
+					}
+				}, false, true, () => {
+					debouncedRefresh();
+				});
+			});
+		}
+	}
+
+	let lastSelectionType = null;
+	async function updateDynamicToolbar() {
+		try {
+			const res = await detectSelectionType();
+			if (res.type !== lastSelectionType) {
+				lastSelectionType = res.type;
+				renderContextToolbar(res.type, res.properties);
+			}
+		} catch(e) {
+			console.error("Error updating toolbar:", e);
+		}
+	}
 
 	// Execution Telemetry Debug State
 	let lastExecutionDebugData = {
@@ -564,6 +1545,8 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		for (let key in theme) {
 			if (key.startsWith('--')) {
 				root.style.setProperty(key, theme[key]);
+			} else {
+				root.style.setProperty('--' + key, theme[key]);
 			}
 		}
 		
@@ -580,25 +1563,30 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		try {
 			this.attachEvent("onSelectionChanged", function() {
 				debouncedRefresh();
+				updateDynamicToolbar();
 			});
 		} catch(e) {}
 
 		try {
 			this.attachEvent("onTargetPositionChanged", function() {
 				debouncedRefresh();
+				updateDynamicToolbar();
 			});
 		} catch(e) {}
 		
-		// Initial scan
+		// Initial scan and toolbar load
 		refreshDocStructureView();
+		updateDynamicToolbar();
 	};
 
 	// Fallback direct event assignments on the plugin object
 	window.Asc.plugin.event_onSelectionChanged = function() {
 		debouncedRefresh();
+		updateDynamicToolbar();
 	};
 	window.Asc.plugin.event_onTargetPositionChanged = function() {
 		debouncedRefresh();
+		updateDynamicToolbar();
 	};
 
 	// Bind Undo / Redo toolbar events
@@ -623,6 +1611,11 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			tabSettings.click();
 			return;
 		}
+
+		appendChatMessage('user', 'Summarize active range');
+		const aiMessage = appendChatMessage('ai', 'Summarizing...', 'text');
+		const aiMessageBody = aiMessage.querySelector('.message-body');
+
 		setLoading(true);
 
 		try {
@@ -644,32 +1637,14 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			const responseContent = await queryActiveLLM(messages, 0.2, false);
 			activeSummaryContent = responseContent.trim();
 			
-			summaryText.innerText = activeSummaryContent;
-			summaryCard.style.display = 'block';
+			renderSummaryInMessage(aiMessageBody, activeSummaryContent);
 			log('Executive summary compiled successfully by Groq AI!', 'success');
 		} catch (err) {
 			log(`Summarization failed: ${err.message}`, 'error');
+			aiMessageBody.innerText = `Summarization failed: ${err.message}`;
 		} finally {
 			setLoading(false);
 		}
-	});
-
-	// Insert Summary button click event
-	insertSummaryBtn.addEventListener('click', () => {
-		if (!activeSummaryContent) return;
-		log("Inserting summary directly at active cursor selection...", "info");
-
-		window.Asc.scope.summaryText = "\n\n" + activeSummaryContent + "\n\n";
-		window.Asc.plugin.callCommand(function() {
-			var oDocument = Api.GetDocument();
-			var oParagraph = Api.CreateParagraph();
-			oParagraph.AddText(Asc.scope.summaryText);
-			oDocument.InsertContent([oParagraph]);
-			return "success";
-		}, false, true, function(res) {
-			log("Summary successfully inserted into document!", "success");
-			summaryCard.style.display = 'none';
-		});
 	});
 
 	// Click run button (Refactored Intent-routed Context-aware Pipeline)
@@ -686,6 +1661,14 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			log('Error: Prompt cannot be empty.', 'error');
 			return;
 		}
+
+		// Append user message and clear input
+		appendChatMessage('user', prompt);
+		promptInput.value = '';
+
+		// Append AI placeholder
+		const aiMessage = appendChatMessage('ai', 'Initializing...', 'text');
+		const aiMessageBody = aiMessage.querySelector('.message-body');
 
 		// Initialize Telemetry Log
 		lastExecutionDebugData = {
@@ -707,11 +1690,13 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 		try {
 			// LAYER 1: Intent Router
+			aiMessageBody.innerText = 'Routing request...';
 			const intent = await routeIntent(prompt);
 			lastExecutionDebugData.intent = intent;
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
 			// LAYER 2: Context Builder Serialization mode determination
+			aiMessageBody.innerText = 'Serializing document context...';
 			let serializationMode = "minimal";
 			if (intent === INTENTS.FORMAT || intent === INTENTS.INSERT_CONTENT || intent === INTENTS.DELETE_CONTENT) {
 				serializationMode = "medium";
@@ -734,6 +1719,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 			if (totalElements === 0 && intent !== INTENTS.CREATE_DOCUMENT) {
 				log('Error: Selection range or document is empty.', 'error');
+				aiMessageBody.innerText = 'Error: Selection range or document is empty.';
 				lastExecutionDebugData.status = "Failed: Selection range or document is empty.";
 				if (typeof updateDebugViewer === 'function') updateDebugViewer();
 				setLoading(false);
@@ -743,6 +1729,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			const activeModel = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
 
 			log(`Contacting Groq API using model: ${activeModel}...`, 'info');
+			aiMessageBody.innerText = 'Querying Planner AI...';
 			lastExecutionDebugData.status = "Running (Querying LLM)...";
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			
@@ -758,17 +1745,29 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			
 			if (!proposedChanges || proposedChanges.length === 0) {
 				log('Analysis complete: No logical changes suggested for this request.', 'warning');
+				aiMessageBody.innerText = 'No edits needed for this request.';
 				lastExecutionDebugData.status = "No changes suggested.";
-				changesCard.style.display = 'none';
 			} else {
 				log(`Successfully decoded ${proposedChanges.length} logical action steps.`, 'success');
 				lastExecutionDebugData.status = "Decoded action plan, waiting for User Accept/Discard...";
-				renderPreview(proposedChanges);
+				
+				// Wait for user choice on preview
+				const choice = await renderChatPreview(aiMessageBody, proposedChanges);
+				if (choice === 'accept') {
+					isEditingAutonomously = true;
+					log('Starting animated autonomous editing workflow...', 'info');
+					executeSequentialEdits(proposedChanges, aiMessageBody);
+				} else {
+					log('Discarded proposed AI edits.', 'warning');
+					proposedChanges = null;
+					isEditingAutonomously = false;
+				}
 			}
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
 		} catch (err) {
 			log(`Execution Error: ${err.message}`, 'error');
+			aiMessageBody.innerText = `Error: ${err.message}`;
 			lastExecutionDebugData.status = "Failed: " + err.message;
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			console.error(err);
@@ -777,23 +1776,34 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 	});
 
-	// Confirm button click - executes sequentially and animated
-	confirmBtn.addEventListener('click', () => {
-		if (!proposedChanges || proposedChanges.length === 0) return;
+	// Bind transaction-level Undo AI button
+	undoAiBtn.addEventListener('click', () => {
+		if (appliedChangesCount <= 0) return;
+		undoAiBtn.disabled = true;
+		log(`Undoing last AI transaction (${appliedChangesCount} operations)...`, 'info');
 		
-		confirmBtn.disabled = true;
-		discardBtn.disabled = true;
-		isEditingAutonomously = true;
-		log('Starting animated autonomous editing workflow...', 'info');
-		executeSequentialEdits(proposedChanges);
-	});
-
-	// Discard button click
-	discardBtn.addEventListener('click', () => {
-		log('Discarded proposed AI edits.', 'warning');
-		proposedChanges = null;
-		isEditingAutonomously = false;
-		changesCard.style.display = 'none';
+		const count = appliedChangesCount;
+		appliedChangesCount = 0;
+		undoAiBtn.style.display = 'none';
+		undoAiBtn.disabled = false;
+		
+		appendChatMessage('user', 'Undo last AI action');
+		const aiMessage = appendChatMessage('ai', 'Reverting document changes...', 'text');
+		const aiMessageBody = aiMessage.querySelector('.message-body');
+		
+		function performMultipleUndos(n) {
+			if (n <= 0) {
+				log('Undo transaction complete!', 'success');
+				aiMessageBody.innerHTML = '<span style="color: var(--success); font-weight: 600;">Document successfully restored to pre-AI state.</span>';
+				debouncedRefresh();
+				return;
+			}
+			window.Asc.plugin.executeMethod("Undo", [], () => {
+				performMultipleUndos(n - 1);
+			});
+		}
+		
+		performMultipleUndos(count);
 	});
 
 	window.Asc.plugin.button = function(id) {
@@ -804,7 +1814,6 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		if (loading) {
 			executeBtn.classList.add('loading');
 			executeBtn.disabled = true;
-			changesCard.style.display = 'none';
 		} else {
 			executeBtn.classList.remove('loading');
 			executeBtn.disabled = false;
@@ -2188,99 +3197,10 @@ User Request:
 		}
 	}
 
-	// Render preview list
-	function renderPreview(changes) {
-		changesList.innerHTML = '';
-		
-		// Ensure control buttons are active and styled correctly when suggestions load
-		confirmBtn.disabled = false;
-		discardBtn.disabled = false;
-		
-		changes.forEach(change => {
-			const original = findElementByIndex(change.targetIndex);
-			if (!original && change.action !== 'createParagraph') return;
 
-			const item = document.createElement('div');
-			item.className = 'review-item';
-
-			let actionBadge = '';
-			if (change.action === 'createParagraph') {
-				actionBadge = '<span class="badge-action action-create">Create</span>';
-			} else if (change.action === 'deleteParagraph') {
-				actionBadge = '<span class="badge-action action-delete">Delete</span>';
-			} else if (change.action === 'pasteHTML') {
-				actionBadge = '<span class="badge-action action-generate" style="background: rgba(139, 92, 246, 0.15) !important; color: #a78bfa !important; border: 1px solid rgba(139, 92, 246, 0.3) !important;">Generate</span>';
-			} else {
-				actionBadge = '<span class="badge-action action-modify">Modify</span>';
-			}
-
-			let formatStr = '';
-			const props = change.properties || {};
-			if (props.fontName) formatStr += `Font: <b>${props.fontName}</b>; `;
-			if (props.fontSize) formatStr += `Size: <b>${props.fontSize/2}pt</b>; `;
-			if (props.bold !== undefined) formatStr += props.bold ? '<b>Bold</b>; ' : 'Regular; ';
-			if (props.italic !== undefined) formatStr += props.italic ? '<i>Italic</i>; ' : 'No Italic; ';
-			if (props.underline !== undefined) formatStr += props.underline ? '<u>Underline</u>; ' : 'No Underline; ';
-			if (props.strikeout !== undefined) formatStr += props.strikeout ? '<strike>Strike</strike>; ' : 'No Strike; ';
-			if (props.alignment) formatStr += `Align: <b>${props.alignment}</b>; `;
-			if (props.color) formatStr += `Color: <span style="color: ${props.color}; font-weight: bold;">${props.color}</span>; `;
-			if (props.highlight) formatStr += `Highlight: <span style="background-color: ${props.highlight}; color: #000; font-weight: bold; padding: 1px 4px; border-radius: 3px;">${props.highlight}</span>; `;
-
-			const originalText = original ? (original.text || `[Table Element at index #${change.targetIndex}]`) : '';
-
-			let diffHTML = '';
-			if (change.action === 'deleteParagraph') {
-				diffHTML = `
-					<div class="diff-original" style="background: rgba(239, 68, 68, 0.08); border-left: 3px solid var(--error); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px;">- "${originalText}"</div>
-				`;
-			} else if (change.action === 'createParagraph') {
-				diffHTML = `
-					<div class="diff-new" style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid var(--success); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px;">+ "${props.newText || ''}"</div>
-				`;
-			} else if (change.action === 'pasteHTML') {
-				const tempDiv = document.createElement('div');
-				tempDiv.innerHTML = props.html || '';
-				const textOnly = tempDiv.textContent || tempDiv.innerText || '';
-				const cleanSnippet = textOnly.length > 150 ? textOnly.substring(0, 150) + '...' : textOnly;
-				diffHTML = `
-					<div class="diff-new" style="background: rgba(139, 92, 246, 0.08); border-left: 3px solid #8b5cf6; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px;">✨ <b>Rich Content Generated:</b> "${cleanSnippet}"</div>
-				`;
-			} else {
-				// modify
-				if (props.newText !== undefined && props.newText !== originalText) {
-					diffHTML = `
-						<div class="diff-original" style="background: rgba(239, 68, 68, 0.05); border-left: 3px solid var(--error); padding: 8px; border-radius: 4px 4px 0 0; font-family: monospace; font-size: 11px; margin-bottom: 2px;">- "${originalText}"</div>
-						<div class="diff-new" style="background: rgba(16, 185, 129, 0.05); border-left: 3px solid var(--success); padding: 8px; border-radius: 0 0 4px 4px; font-family: monospace; font-size: 11px;">+ "${props.newText}"</div>
-					`;
-				} else if (originalText) {
-					diffHTML = `
-						<div style="background: rgba(255, 255, 255, 0.02); border-left: 3px solid var(--text-secondary); padding: 8px; border-radius: 4px; font-style: italic; color: var(--text-secondary); font-size: 11.5px;">"${originalText.substring(0, 100)}${originalText.length > 100 ? '...' : ''}"</div>
-					`;
-				}
-			}
-
-			item.innerHTML = `
-				<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-					<span style="font-weight: 700; color: var(--text-primary); font-size: 11.5px;">Element #${change.targetIndex + 1}</span>
-					${actionBadge}
-				</div>
-				<div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">
-					${diffHTML}
-				</div>
-				${formatStr ? `
-					<div style="font-size: 11px; color: var(--primary); background: rgba(245, 158, 11, 0.05); border: 1px dashed rgba(245, 158, 11, 0.25); padding: 6px; border-radius: 4px; margin-top: 4px; line-height: 1.4;">
-						✨ <b>Style Changes:</b> ${formatStr}
-					</div>
-				` : ''}
-			`;
-			changesList.appendChild(item);
-		});
-
-		changesCard.style.display = 'block';
-	}
 
 	// Sequential, Gated, Self-Healing executor engine utilizing Verification and Retry layers
-	function executeSequentialEdits(changes) {
+	function executeSequentialEdits(changes, aiMessageBody) {
 		// Normalize standard points to half-points for OnlyOffice API compatibility once
 		if (changes && Array.isArray(changes)) {
 			changes.forEach(change => {
@@ -2299,11 +3219,17 @@ User Request:
 			if (i >= changes.length) {
 				log('All autonomous AI edits applied live, verified, and completed!', 'success');
 				proposedChanges = null;
-				// Re-enable confirm and discard buttons
-				confirmBtn.disabled = false;
-				discardBtn.disabled = false;
+				executeBtn.disabled = false;
 				isEditingAutonomously = false;
-				changesCard.style.display = 'none';
+
+				// Update message body
+				aiMessageBody.innerHTML = `
+					<div style="color: var(--success); font-weight: 600; margin-bottom: 4px;">✨ Applied successfully!</div>
+					<div style="font-size: 9.5px; color: var(--text-secondary);">Applied and verified ${changes.length} document updates.</div>
+				`;
+				
+				appliedChangesCount = changes.length;
+				undoAiBtn.style.display = 'inline-flex';
 
 				// Update execution telemetry
 				lastExecutionDebugData.status = "Success (All action steps executed and verified successfully!)";
@@ -2322,6 +3248,11 @@ User Request:
 			const actualTargetIndex = targetIndex + indexOffset;
 
 			log(`Applying action [${actionName.toUpperCase()}] to element #${targetIndex + 1} (actual index #${actualTargetIndex + 1}). Attempt ${retryCount + 1}/${maxRetries}...`, 'info');
+
+			aiMessageBody.innerHTML = `
+				<div style="color: var(--info); font-weight: 600; margin-bottom: 4px;">⚡ Applying edits...</div>
+				<div style="font-size: 9.5px; color: var(--text-secondary);">Applying ${actionName} on element #${targetIndex + 1} (${i + 1} of ${changes.length})</div>
+			`;
 
 			// Capture element state before applying change
 			const beforeState = await captureElementState(actualTargetIndex);

@@ -32,25 +32,51 @@ This repository contains the source for the `OneScript` ONLYOFFICE plugin and a 
 To develop and test local changes:
 
 1. **Clean up old plugin directory structures:**
-   ```bash
-   rm -rf ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/{6298516B-E753-435E-A2E4-2C76A28C73B2}
-   rm -rf ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}
-   rm -rf /home/saravana/.local/share/onlyoffice/desktopeditors/editors/sdkjs-plugins/{6298516B-E753-435E-A2E4-2C76A28C73B2}
-   ```
+   * **On Linux/macOS:**
+     ```bash
+     rm -rf ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/{6298516B-E753-435E-A2E4-2C76A28C73B2}
+     rm -rf ~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}
+     rm -rf ~/.local/share/onlyoffice/desktopeditors/editors/sdkjs-plugins/{6298516B-E753-435E-A2E4-2C76A28C73B2}
+     ```
+   * **On Windows (PowerShell):**
+     ```powershell
+     Remove-Item -Path "$env:LOCALAPPDATA\ONLYOFFICE\DesktopEditors\data\sdkjs-plugins\asc.{6298516B-E753-435E-A2E4-2C76A28C73B2}" -Recurse -Force -ErrorAction SilentlyContinue
+     Remove-Item -Path "$env:LOCALAPPDATA\ONLYOFFICE\DesktopEditors\data\sdkjs-plugins\{6298516B-E753-435E-A2E4-2C76A28C73B2}" -Recurse -Force -ErrorAction SilentlyContinue
+     ```
 
 2. **Run the Hot-Sync File Watcher:**
-   Since ONLYOFFICE's internal browser sandbox can have sandboxing or permission-based issues following symbolic links on Linux, we provide a premium Node.js hot-sync script. It recursively watches your local `plugin/` folder and instantly copies any modified files to ONLYOFFICE's physical plugin installation directories:
+   We provide a premium Node.js hot-sync script. It copies all plugin files on startup (full sync) and recursively watches the local `plugin/` folder, copying any modifications immediately:
    ```bash
    node dev-watch.js
    ```
 
 3. **Start ONLYOFFICE Desktop Editors in Debug Mode:**
-   ```bash
-   onlyoffice-desktopeditors --ascdesktop-support-debug-info
-   ```
+   To bypass caching and view changes, you must run ONLYOFFICE in debug mode:
+   * **On Windows (PowerShell):**
+     ```powershell
+     & "C:\Program Files\ONLYOFFICE\DesktopEditors\DesktopEditors.exe" --ascdesktop-support-debug-info
+     ```
+   * **On Linux:**
+     ```bash
+     onlyoffice-desktopeditors --ascdesktop-support-debug-info
+     ```
+   * **On macOS:**
+     ```bash
+     /Applications/ONLYOFFICE.app/Contents/MacOS/ONLYOFFICE --ascdesktop-support-debug-info
+     ```
 
 4. **Iterate:**
-   Any change you make to `plugin/index.html` or `plugin/plugin.js` will instantly sync. Simply right-click on the plugin's sidebar within ONLYOFFICE and choose **Reload** to view updates instantly!
+   Any change you make to `plugin/index.html` or `plugin/plugin.js` will instantly sync. Simply right-click on the plugin's sidebar within ONLYOFFICE and choose **Reload** to view updates!
+
+5. **Troubleshooting Caching:**
+   If ONLYOFFICE is still not showing your changes, it is using a cached version of the plugin. To clear the Chromium Embedded Framework (CEF) cache:
+   * Run the watcher with the `--clear-cache` flag (ensure ONLYOFFICE is fully closed first):
+     ```bash
+     node dev-watch.js --clear-cache
+     ```
+   * Or manually delete the cache folder:
+     * **Windows:** `%LOCALAPPDATA%\ONLYOFFICE\DesktopEditors\data\cache`
+     * **Linux:** `~/.config/onlyoffice/DesktopEditors/cache`
 
 ## Packaged Production Mode
 
