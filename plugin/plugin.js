@@ -87,8 +87,19 @@
 		return messageDiv;
 	}
 
+	// Helper to perform multiple undo operations sequentially
+	function performMultipleUndos(n, callback) {
+		if (n <= 0) {
+			if (callback) callback();
+			return;
+		}
+		window.Asc.plugin.executeMethod("Undo", [], () => {
+			performMultipleUndos(n - 1, callback);
+		});
+	}
+
 	// Render Proposed Changes Inline
-	function renderChatPreview(aiMessageBody, changes) {
+	function renderChatPreview(aiMessageBody, changes, applied = false) {
 		aiMessageBody.innerHTML = '';
 		
 		const wrapper = document.createElement('div');
@@ -101,11 +112,11 @@
 		title.style.fontWeight = 'bold';
 		title.style.color = 'var(--primary)';
 		title.style.fontSize = '11px';
-		title.innerText = 'Proposed Changes Preview:';
+		title.innerText = applied ? 'Applied Changes Summary:' : 'Proposed Changes Preview:';
 		wrapper.appendChild(title);
 		
 		const changesListDiv = document.createElement('div');
-		changesListDiv.style.maxHeight = '200px';
+		changesListDiv.style.maxHeight = '140px';
 		changesListDiv.style.overflowY = 'auto';
 		changesListDiv.style.display = 'flex';
 		changesListDiv.style.flexDirection = 'column';
@@ -139,6 +150,7 @@
 			if (props.fontSize) formatStr += `Size: ${props.fontSize/2}pt; `;
 			if (props.bold !== undefined) formatStr += props.bold ? 'Bold; ' : 'Regular; ';
 			if (props.italic !== undefined) formatStr += props.italic ? 'Italic; ' : 'No Italic; ';
+			if (props.alignment !== undefined) formatStr += `Align: ${props.alignment}; `;
 			
 			const originalText = original ? (original.text || `[Table Element at #${change.targetIndex}]`) : '';
 			
@@ -180,7 +192,7 @@
 		
 		const acceptBtn = document.createElement('button');
 		acceptBtn.className = 'btn';
-		acceptBtn.innerText = 'Accept & Apply';
+		acceptBtn.innerText = applied ? 'Accept (Keep)' : 'Accept & Apply';
 		acceptBtn.style.flex = '1.2';
 		acceptBtn.style.fontSize = '10px';
 		acceptBtn.style.padding = '6px';
@@ -188,7 +200,7 @@
 		
 		const discardBtn = document.createElement('button');
 		discardBtn.className = 'btn btn-outline btn-danger';
-		discardBtn.innerText = 'Discard';
+		discardBtn.innerText = applied ? 'Discard (Undo)' : 'Discard';
 		discardBtn.style.flex = '0.8';
 		discardBtn.style.fontSize = '10px';
 		discardBtn.style.padding = '6px';
@@ -203,14 +215,48 @@
 			acceptBtn.addEventListener('click', () => {
 				acceptBtn.disabled = true;
 				discardBtn.disabled = true;
-				acceptBtn.innerText = 'Applying...';
+				if (applied) {
+					btnGroup.remove();
+					const msg = document.createElement('div');
+					msg.style.color = 'var(--success)';
+					msg.style.fontWeight = '600';
+					msg.style.fontSize = '10.5px';
+					msg.style.marginTop = '4px';
+					msg.innerText = '✓ Changes accepted.';
+					wrapper.appendChild(msg);
+					appliedChangesCount = 0;
+					undoAiBtn.style.display = 'none';
+					log('User accepted the AI document modifications.', 'success');
+				} else {
+					acceptBtn.innerText = 'Applying...';
+				}
 				resolve('accept');
 			});
 			
 			discardBtn.addEventListener('click', () => {
 				acceptBtn.disabled = true;
 				discardBtn.disabled = true;
-				wrapper.innerHTML = '<div style="color: var(--text-muted); font-style: italic; margin-top: 4px;">Proposed changes discarded.</div>';
+				if (applied) {
+					btnGroup.remove();
+					const msg = document.createElement('div');
+					msg.style.color = 'var(--error)';
+					msg.style.fontWeight = '600';
+					msg.style.fontSize = '10.5px';
+					msg.style.marginTop = '4px';
+					msg.innerText = '✗ Reverting changes...';
+					wrapper.appendChild(msg);
+					
+					log(`User discarded the AI modifications. Undoing ${appliedChangesCount} operations...`, 'warning');
+					performMultipleUndos(appliedChangesCount, () => {
+						log('Reversal complete. Document successfully restored.', 'success');
+						msg.innerText = '✗ Changes discarded & reverted.';
+						appliedChangesCount = 0;
+						undoAiBtn.style.display = 'none';
+						debouncedRefresh();
+					});
+				} else {
+					wrapper.innerHTML = '<div style="color: var(--text-muted); font-style: italic; margin-top: 4px;">Proposed changes discarded.</div>';
+				}
 				resolve('discard');
 			});
 		});
@@ -1227,6 +1273,43 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 	});
 
+	// Accordion toggle handler for Settings cards
+	document.querySelectorAll('.card-header').forEach(header => {
+		header.addEventListener('click', (e) => {
+			if (e.target.closest('#copy-debug-log') || e.target.closest('#clear-debug-log') || e.target.closest('#clear-logs') || e.target.closest('#copy-log-file-btn') || e.target.closest('#reset-logs')) {
+				return; // Prevent toggle when clicking header actions
+			}
+			const body = header.nextElementSibling;
+			const chevron = header.querySelector('.accordion-chevron');
+			if (body && body.classList.contains('card-body')) {
+				if (body.style.display === 'none' || body.style.display === '') {
+					body.style.display = 'block';
+					if (chevron) chevron.innerText = '▼';
+				} else {
+					body.style.display = 'none';
+					if (chevron) chevron.innerText = '►';
+				}
+			}
+		});
+	});
+
+	// Copy Developer Log File click handler
+	const copyLogFileBtn = document.getElementById('copy-log-file-btn');
+	if (copyLogFileBtn) {
+		copyLogFileBtn.addEventListener('click', () => {
+			const logContent = logLines.length > 0 ? logLines.join('\n') : "No log entries recorded yet.";
+			navigator.clipboard.writeText(logContent).then(() => {
+				log('Copied all developer logs to clipboard.', 'success');
+				copyLogFileBtn.innerText = 'Copied!';
+				setTimeout(() => {
+					copyLogFileBtn.innerText = 'Copy Log';
+				}, 1500);
+			}).catch(err => {
+				log('Failed to copy logs: ' + err.message, 'error');
+			});
+		});
+	}
+
 	// Available models with relative cost mappings
 	const providerModels = {
 		groq: [
@@ -1749,19 +1832,10 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 				lastExecutionDebugData.status = "No changes suggested.";
 			} else {
 				log(`Successfully decoded ${proposedChanges.length} logical action steps.`, 'success');
-				lastExecutionDebugData.status = "Decoded action plan, waiting for User Accept/Discard...";
-				
-				// Wait for user choice on preview
-				const choice = await renderChatPreview(aiMessageBody, proposedChanges);
-				if (choice === 'accept') {
-					isEditingAutonomously = true;
-					log('Starting animated autonomous editing workflow...', 'info');
-					executeSequentialEdits(proposedChanges, aiMessageBody);
-				} else {
-					log('Discarded proposed AI edits.', 'warning');
-					proposedChanges = null;
-					isEditingAutonomously = false;
-				}
+				lastExecutionDebugData.status = "Executing plan live on document...";
+				isEditingAutonomously = true;
+				log('Executing autonomous editing workflow immediately on document...', 'info');
+				executeSequentialEdits(proposedChanges, aiMessageBody);
 			}
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
@@ -1791,19 +1865,11 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		const aiMessage = appendChatMessage('ai', 'Reverting document changes...', 'text');
 		const aiMessageBody = aiMessage.querySelector('.message-body');
 		
-		function performMultipleUndos(n) {
-			if (n <= 0) {
-				log('Undo transaction complete!', 'success');
-				aiMessageBody.innerHTML = '<span style="color: var(--success); font-weight: 600;">Document successfully restored to pre-AI state.</span>';
-				debouncedRefresh();
-				return;
-			}
-			window.Asc.plugin.executeMethod("Undo", [], () => {
-				performMultipleUndos(n - 1);
-			});
-		}
-		
-		performMultipleUndos(count);
+		performMultipleUndos(count, () => {
+			log('Undo transaction complete!', 'success');
+			aiMessageBody.innerHTML = '<span style="color: var(--success); font-weight: 600;">Document successfully restored to pre-AI state.</span>';
+			debouncedRefresh();
+		});
 	});
 
 	window.Asc.plugin.button = function(id) {
@@ -3221,15 +3287,11 @@ User Request:
 				proposedChanges = null;
 				executeBtn.disabled = false;
 				isEditingAutonomously = false;
-
-				// Update message body
-				aiMessageBody.innerHTML = `
-					<div style="color: var(--success); font-weight: 600; margin-bottom: 4px;">✨ Applied successfully!</div>
-					<div style="font-size: 9.5px; color: var(--text-secondary);">Applied and verified ${changes.length} document updates.</div>
-				`;
-				
 				appliedChangesCount = changes.length;
 				undoAiBtn.style.display = 'inline-flex';
+
+				// Show summary review panel with Keep/Undo buttons immediately inside the chat history
+				renderChatPreview(aiMessageBody, changes, true);
 
 				// Update execution telemetry
 				lastExecutionDebugData.status = "Success (All action steps executed and verified successfully!)";
@@ -3274,6 +3336,7 @@ User Request:
 				return new Promise((resolve) => {
 					window.Asc.scope.change = change;
 					window.Asc.scope.actualTargetIndex = actualTargetIndex;
+					window.Asc.scope.helperCode = parseAndApplyTextWithTags.toString();
 
 					if (actionName === 'delete_paragraph' || actionName === 'deleteParagraph') {
 						window.Asc.plugin.callCommand(function() {
@@ -3293,6 +3356,286 @@ User Request:
 							var actualTargetIndex = Asc.scope.actualTargetIndex;
 							var oDocument = Api.GetDocument();
 							var countBefore = oDocument.GetElementsCount();
+							
+							var parseAndApplyTextWithTags = function(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
+								try { oPar.RemoveAllElements(); } catch(e) {}
+								if (htmlStr) {
+									htmlStr = htmlStr
+										.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+										.replace(/__(.*?)__/g, '<b>$1</b>')
+										.replace(/\*(.*?)\*/g, '<i>$1</i>')
+										.replace(/_(.*?)_/g, '<i>$1</i>');
+								}
+								var regex = /(<[^>]+>)/g;
+								var parts = String(htmlStr || "").split(regex);
+								var formatState = {
+									fontName: pProps.fontName || defFont || "Calibri",
+									fontSize: pProps.fontSize || defSize || 22,
+									bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
+									italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
+									underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
+									strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
+									doubleStrikeout: pProps.doubleStrikeout !== undefined ? pProps.doubleStrikeout : false,
+									smallCaps: pProps.smallCaps !== undefined ? pProps.smallCaps : false,
+									caps: pProps.caps !== undefined ? pProps.caps : false,
+									subscript: pProps.subscript !== undefined ? pProps.subscript : false,
+									superscript: pProps.superscript !== undefined ? pProps.superscript : false,
+									characterSpacing: pProps.characterSpacing !== undefined ? pProps.characterSpacing : 0,
+									color: pProps.color || defColorHex || "#000000",
+									highlight: pProps.highlight || defHighlight || "none"
+								};
+
+								if (!htmlStr) {
+									var oRun = null;
+									try { oRun = oPar.AddText(""); } catch(eText) {}
+									if (oRun) {
+										if (formatState.fontName) {
+											try { oRun.SetFontFamily(formatState.fontName); } catch(e) {}
+											try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+										}
+										if (formatState.fontSize) {
+											try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+										}
+										try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+										try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+										try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+										try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+										try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+										try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+										try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+										try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+										try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+										try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+										if (formatState.highlight) {
+											try {
+												var hl = formatState.highlight.toLowerCase().trim();
+												if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+												else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+												else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+												else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+												else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+												else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+												else if (hl.indexOf("magenta") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+												else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+												else oRun.SetHighlight(hl);
+											} catch(eHighlight) {}
+										}
+										if (formatState.color) {
+											try {
+												var hex = String(formatState.color).replace('#', '').trim();
+												if (hex.length === 6) {
+													var red = parseInt(hex.substring(0, 2), 16);
+													var green = parseInt(hex.substring(2, 4), 16);
+													var blue = parseInt(hex.substring(4, 6), 16);
+													try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+														try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+													}
+												}
+											} catch(eColorOuter) {}
+										}
+									}
+									return;
+								}
+
+								var stateStack = [JSON.parse(JSON.stringify(formatState))];
+								for (var idx = 0; idx < parts.length; idx++) {
+									var part = parts[idx];
+									if (!part) continue;
+									if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
+										var tagLower = part.toLowerCase();
+										if (tagLower.indexOf("</") === 0) {
+											if (stateStack.length > 1) {
+												stateStack.pop();
+												formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
+											}
+										} else {
+											var newState = JSON.parse(JSON.stringify(formatState));
+											if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
+												newState.bold = true;
+											} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
+												newState.italic = true;
+											} else if (tagLower.indexOf("<u") === 0) {
+												newState.underline = true;
+											} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
+												newState.strikeout = true;
+											} else if (tagLower.indexOf("<sub>") === 0) {
+												newState.subscript = true;
+												newState.superscript = false;
+											} else if (tagLower.indexOf("<sup>") === 0) {
+												newState.superscript = true;
+												newState.subscript = false;
+											} else if (tagLower.indexOf("<small>") === 0) {
+												newState.smallCaps = true;
+											} else if (tagLower.indexOf("<big>") === 0) {
+												newState.caps = true;
+												newState.fontSize = Math.round(newState.fontSize * 1.2);
+											} else if (tagLower.indexOf("<font") === 0) {
+												var match = part.match(/color=["']([^"']+)["']/i);
+												if (match && match[1]) newState.color = match[1];
+												var matchFace = part.match(/face=["']([^"']+)["']/i);
+												if (matchFace && matchFace[1]) newState.fontName = matchFace[1];
+												var matchSize = part.match(/size=["']([^"']+)["']/i);
+												if (matchSize && matchSize[1]) newState.fontSize = parseFloat(matchSize[1]);
+											} else if (tagLower.indexOf("<mark") === 0) {
+												var match = part.match(/color=["']([^"']+)["']/i);
+												var styleMatch = part.match(/style=["']([^"']+)["']/i);
+												if (match && match[1]) {
+													newState.highlight = match[1];
+												} else if (styleMatch && styleMatch[1]) {
+													var styleStr = styleMatch[1];
+													var declarations = styleStr.split(';');
+													var foundBg = false;
+													for (var d = 0; d < declarations.length; d++) {
+														var dec = declarations[d].trim();
+														if (!dec) continue;
+														var pSplit = dec.split(':');
+														if (pSplit.length >= 2) {
+															var propName = pSplit[0].trim().toLowerCase();
+															var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+															if (propName === 'background-color' || propName === 'background' || propName === 'color') {
+																newState.highlight = propVal;
+																foundBg = true;
+															}
+														}
+													}
+													if (!foundBg) newState.highlight = "yellow";
+												} else {
+													newState.highlight = "yellow";
+												}
+											} else if (tagLower.indexOf("<span") === 0) {
+												var styleMatch = part.match(/style=["']([^"']+)["']/i);
+												if (styleMatch && styleMatch[1]) {
+													var styleStr = styleMatch[1];
+													var declarations = styleStr.split(';');
+													for (var d = 0; d < declarations.length; d++) {
+														var dec = declarations[d].trim();
+														if (!dec) continue;
+														var pSplit = dec.split(':');
+														if (pSplit.length >= 2) {
+															var propName = pSplit[0].trim().toLowerCase();
+															var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+															if (propName === 'font-weight') {
+																if (propVal === 'bold' || propVal === '700' || propVal === '800' || propVal === '900') newState.bold = true;
+																else if (propVal === 'normal' || propVal === '400') newState.bold = false;
+															} else if (propName === 'font-style') {
+																if (propVal === 'italic' || propVal === 'oblique') newState.italic = true;
+																else if (propVal === 'normal') newState.italic = false;
+															} else if (propName === 'text-decoration') {
+																if (propVal.indexOf('underline') !== -1) newState.underline = true;
+																if (propVal.indexOf('line-through') !== -1) newState.strikeout = true;
+																if (propVal.indexOf('double-line-through') !== -1 || propVal.indexOf('double') !== -1) newState.doubleStrikeout = true;
+															} else if (propName === 'color') {
+																newState.color = propVal;
+															} else if (propName === 'background-color' || propName === 'background') {
+																newState.highlight = propVal;
+															} else if (propName === 'font-family') {
+																newState.fontName = propVal.replace(/['"]/g, '').trim();
+															} else if (propName === 'font-size') {
+																var numVal = parseFloat(propVal);
+																if (propVal.indexOf('pt') !== -1) {
+																	newState.fontSize = Math.round(numVal * 2);
+																} else if (propVal.indexOf('px') !== -1) {
+																	newState.fontSize = Math.round(numVal * 1.5);
+																}
+															} else if (propName === 'letter-spacing') {
+																var numVal = parseFloat(propVal);
+																if (propVal.indexOf('pt') !== -1) {
+																	newState.characterSpacing = Math.round(numVal * 20);
+																} else if (propVal.indexOf('px') !== -1) {
+																	newState.characterSpacing = Math.round(numVal * 15);
+																} else {
+																	newState.characterSpacing = Math.round(numVal);
+																}
+															} else if (propName === 'text-transform') {
+																if (propVal === 'uppercase') newState.caps = true;
+																else if (propVal === 'lowercase') newState.caps = false;
+															} else if (propName === 'font-variant') {
+																if (propVal === 'small-caps') newState.smallCaps = true;
+															} else if (propName === 'vertical-align') {
+																if (propVal === 'super') {
+																	newState.superscript = true;
+																	newState.subscript = false;
+																} else if (propVal === 'sub') {
+																	newState.subscript = true;
+																	newState.superscript = false;
+																}
+															}
+														}
+													}
+												}
+											}
+											stateStack.push(newState);
+											formatState = newState;
+										}
+									} else {
+										var decText = part
+											.replace(/&quot;/g, '"')
+											.replace(/&lt;/g, '<')
+											.replace(/&gt;/g, '>')
+											.replace(/&amp;/g, '&')
+											.replace(/&#39;/g, "'")
+											.replace(/&apos;/g, "'");
+										var oRun = null;
+										try { oRun = oPar.AddText(decText); } catch(eText) {}
+										if (oRun) {
+											if (formatState.fontName) {
+												try { oRun.SetFontFamily(formatState.fontName); } catch(e) {}
+												try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+											}
+											if (formatState.fontSize) {
+												try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+											}
+											try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+											try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+											try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+											try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+											try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+											try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+											try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+											try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+											try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+											try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+											if (formatState.highlight) {
+												try {
+													var hl = formatState.highlight.toLowerCase().trim();
+													if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+													else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+													else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+													else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+													else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+													else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+													else if (hl.indexOf("magenta") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+													else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+													else oRun.SetHighlight(hl);
+												} catch(eHighlight) {}
+											}
+											if (formatState.color) {
+												try {
+													var hex = String(formatState.color).replace('#', '').trim();
+													if (hex.length === 6) {
+														var red = parseInt(hex.substring(0, 2), 16);
+														var green = parseInt(hex.substring(2, 4), 16);
+														var blue = parseInt(hex.substring(4, 6), 16);
+														try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+															try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+														}
+													} else {
+														var namedColors = {
+															"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+															"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+															"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+														};
+														if (namedColors[hex.toLowerCase()]) {
+															var rgb = namedColors[hex.toLowerCase()];
+															oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+														}
+													}
+												} catch(eColorOuter) {}
+											}
+										}
+									}
+								}
+							};
 							
 							// Clamp index to prevent out-of-bounds AddElement errors when appending
 							if (actualTargetIndex >= countBefore) {
@@ -3356,7 +3699,6 @@ User Request:
 							var oProps = change.properties || {};
 							try {
 								oDocument.AddElement(actualTargetIndex + 1, oNewParagraph);
-								oNewParagraph.Select();
 								
 								if (oProps.newText) {
 									parseAndApplyTextWithTags(oNewParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
@@ -3605,6 +3947,286 @@ User Request:
 							var actualTargetIndex = Asc.scope.actualTargetIndex;
 							var oDocument = Api.GetDocument();
 							var countBefore = oDocument.GetElementsCount();
+							
+							var parseAndApplyTextWithTags = function(oPar, htmlStr, defFont, defSize, defBold, defItalic, defUnderline, defStrikeout, defColorHex, defHighlight, pProps) {
+								try { oPar.RemoveAllElements(); } catch(e) {}
+								if (htmlStr) {
+									htmlStr = htmlStr
+										.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+										.replace(/__(.*?)__/g, '<b>$1</b>')
+										.replace(/\*(.*?)\*/g, '<i>$1</i>')
+										.replace(/_(.*?)_/g, '<i>$1</i>');
+								}
+								var regex = /(<[^>]+>)/g;
+								var parts = String(htmlStr || "").split(regex);
+								var formatState = {
+									fontName: pProps.fontName || defFont || "Calibri",
+									fontSize: pProps.fontSize || defSize || 22,
+									bold: pProps.bold !== undefined ? pProps.bold : (defBold !== undefined ? defBold : false),
+									italic: pProps.italic !== undefined ? pProps.italic : (defItalic !== undefined ? defItalic : false),
+									underline: pProps.underline !== undefined ? pProps.underline : (defUnderline !== undefined ? defUnderline : false),
+									strikeout: pProps.strikeout !== undefined ? pProps.strikeout : (defStrikeout !== undefined ? defStrikeout : false),
+									doubleStrikeout: pProps.doubleStrikeout !== undefined ? pProps.doubleStrikeout : false,
+									smallCaps: pProps.smallCaps !== undefined ? pProps.smallCaps : false,
+									caps: pProps.caps !== undefined ? pProps.caps : false,
+									subscript: pProps.subscript !== undefined ? pProps.subscript : false,
+									superscript: pProps.superscript !== undefined ? pProps.superscript : false,
+									characterSpacing: pProps.characterSpacing !== undefined ? pProps.characterSpacing : 0,
+									color: pProps.color || defColorHex || "#000000",
+									highlight: pProps.highlight || defHighlight || "none"
+								};
+
+								if (!htmlStr) {
+									var oRun = null;
+									try { oRun = oPar.AddText(""); } catch(eText) {}
+									if (oRun) {
+										if (formatState.fontName) {
+											try { oRun.SetFontFamily(formatState.fontName); } catch(e) {}
+											try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+										}
+										if (formatState.fontSize) {
+											try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+										}
+										try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+										try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+										try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+										try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+										try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+										try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+										try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+										try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+										try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+										try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+										if (formatState.highlight) {
+											try {
+												var hl = formatState.highlight.toLowerCase().trim();
+												if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+												else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+												else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+												else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+												else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+												else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+												else if (hl.indexOf("magenta") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+												else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+												else oRun.SetHighlight(hl);
+											} catch(eHighlight) {}
+										}
+										if (formatState.color) {
+											try {
+												var hex = String(formatState.color).replace('#', '').trim();
+												if (hex.length === 6) {
+													var red = parseInt(hex.substring(0, 2), 16);
+													var green = parseInt(hex.substring(2, 4), 16);
+													var blue = parseInt(hex.substring(4, 6), 16);
+													try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+														try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+													}
+												}
+											} catch(eColorOuter) {}
+										}
+									}
+									return;
+								}
+
+								var stateStack = [JSON.parse(JSON.stringify(formatState))];
+								for (var idx = 0; idx < parts.length; idx++) {
+									var part = parts[idx];
+									if (!part) continue;
+									if (part.charAt(0) === '<' && part.charAt(part.length - 1) === '>') {
+										var tagLower = part.toLowerCase();
+										if (tagLower.indexOf("</") === 0) {
+											if (stateStack.length > 1) {
+												stateStack.pop();
+												formatState = JSON.parse(JSON.stringify(stateStack[stateStack.length - 1]));
+											}
+										} else {
+											var newState = JSON.parse(JSON.stringify(formatState));
+											if (tagLower.indexOf("<b") === 0 || tagLower.indexOf("<strong") === 0) {
+												newState.bold = true;
+											} else if (tagLower.indexOf("<i") === 0 || tagLower.indexOf("<em") === 0) {
+												newState.italic = true;
+											} else if (tagLower.indexOf("<u") === 0) {
+												newState.underline = true;
+											} else if (tagLower.indexOf("<strike") === 0 || tagLower.indexOf("<del") === 0 || tagLower.indexOf("<s") === 0) {
+												newState.strikeout = true;
+											} else if (tagLower.indexOf("<sub>") === 0) {
+												newState.subscript = true;
+												newState.superscript = false;
+											} else if (tagLower.indexOf("<sup>") === 0) {
+												newState.superscript = true;
+												newState.subscript = false;
+											} else if (tagLower.indexOf("<small>") === 0) {
+												newState.smallCaps = true;
+											} else if (tagLower.indexOf("<big>") === 0) {
+												newState.caps = true;
+												newState.fontSize = Math.round(newState.fontSize * 1.2);
+											} else if (tagLower.indexOf("<font") === 0) {
+												var match = part.match(/color=["']([^"']+)["']/i);
+												if (match && match[1]) newState.color = match[1];
+												var matchFace = part.match(/face=["']([^"']+)["']/i);
+												if (matchFace && matchFace[1]) newState.fontName = matchFace[1];
+												var matchSize = part.match(/size=["']([^"']+)["']/i);
+												if (matchSize && matchSize[1]) newState.fontSize = parseFloat(matchSize[1]);
+											} else if (tagLower.indexOf("<mark") === 0) {
+												var match = part.match(/color=["']([^"']+)["']/i);
+												var styleMatch = part.match(/style=["']([^"']+)["']/i);
+												if (match && match[1]) {
+													newState.highlight = match[1];
+												} else if (styleMatch && styleMatch[1]) {
+													var styleStr = styleMatch[1];
+													var declarations = styleStr.split(';');
+													var foundBg = false;
+													for (var d = 0; d < declarations.length; d++) {
+														var dec = declarations[d].trim();
+														if (!dec) continue;
+														var pSplit = dec.split(':');
+														if (pSplit.length >= 2) {
+															var propName = pSplit[0].trim().toLowerCase();
+															var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+															if (propName === 'background-color' || propName === 'background' || propName === 'color') {
+																newState.highlight = propVal;
+																foundBg = true;
+															}
+														}
+													}
+													if (!foundBg) newState.highlight = "yellow";
+												} else {
+													newState.highlight = "yellow";
+												}
+											} else if (tagLower.indexOf("<span") === 0) {
+												var styleMatch = part.match(/style=["']([^"']+)["']/i);
+												if (styleMatch && styleMatch[1]) {
+													var styleStr = styleMatch[1];
+													var declarations = styleStr.split(';');
+													for (var d = 0; d < declarations.length; d++) {
+														var dec = declarations[d].trim();
+														if (!dec) continue;
+														var pSplit = dec.split(':');
+														if (pSplit.length >= 2) {
+															var propName = pSplit[0].trim().toLowerCase();
+															var propVal = pSplit.slice(1).join(':').trim().toLowerCase();
+															if (propName === 'font-weight') {
+																if (propVal === 'bold' || propVal === '700' || propVal === '800' || propVal === '900') newState.bold = true;
+																else if (propVal === 'normal' || propVal === '400') newState.bold = false;
+															} else if (propName === 'font-style') {
+																if (propVal === 'italic' || propVal === 'oblique') newState.italic = true;
+																else if (propVal === 'normal') newState.italic = false;
+															} else if (propName === 'text-decoration') {
+																if (propVal.indexOf('underline') !== -1) newState.underline = true;
+																if (propVal.indexOf('line-through') !== -1) newState.strikeout = true;
+																if (propVal.indexOf('double-line-through') !== -1 || propVal.indexOf('double') !== -1) newState.doubleStrikeout = true;
+															} else if (propName === 'color') {
+																newState.color = propVal;
+															} else if (propName === 'background-color' || propName === 'background') {
+																newState.highlight = propVal;
+															} else if (propName === 'font-family') {
+																newState.fontName = propVal.replace(/['"]/g, '').trim();
+															} else if (propName === 'font-size') {
+																var numVal = parseFloat(propVal);
+																if (propVal.indexOf('pt') !== -1) {
+																	newState.fontSize = Math.round(numVal * 2);
+																} else if (propVal.indexOf('px') !== -1) {
+																	newState.fontSize = Math.round(numVal * 1.5);
+																}
+															} else if (propName === 'letter-spacing') {
+																var numVal = parseFloat(propVal);
+																if (propVal.indexOf('pt') !== -1) {
+																	newState.characterSpacing = Math.round(numVal * 20);
+																} else if (propVal.indexOf('px') !== -1) {
+																	newState.characterSpacing = Math.round(numVal * 15);
+																} else {
+																	newState.characterSpacing = Math.round(numVal);
+																}
+															} else if (propName === 'text-transform') {
+																if (propVal === 'uppercase') newState.caps = true;
+																else if (propVal === 'lowercase') newState.caps = false;
+															} else if (propName === 'font-variant') {
+																if (propVal === 'small-caps') newState.smallCaps = true;
+															} else if (propName === 'vertical-align') {
+																if (propVal === 'super') {
+																	newState.superscript = true;
+																	newState.subscript = false;
+																} else if (propVal === 'sub') {
+																	newState.subscript = true;
+																	newState.superscript = false;
+																}
+															}
+														}
+													}
+												}
+											}
+											stateStack.push(newState);
+											formatState = newState;
+										}
+									} else {
+										var decText = part
+											.replace(/&quot;/g, '"')
+											.replace(/&lt;/g, '<')
+											.replace(/&gt;/g, '>')
+											.replace(/&amp;/g, '&')
+											.replace(/&#39;/g, "'")
+											.replace(/&apos;/g, "'");
+										var oRun = null;
+										try { oRun = oPar.AddText(decText); } catch(eText) {}
+										if (oRun) {
+											if (formatState.fontName) {
+												try { oRun.SetFontFamily(formatState.fontName); } catch(e) {}
+												try { oRun.SetFontName(formatState.fontName); } catch(e) {}
+											}
+											if (formatState.fontSize) {
+												try { oRun.SetFontSize(formatState.fontSize); } catch(e) {}
+											}
+											try { oRun.SetBold(!!formatState.bold); } catch(e) {}
+											try { oRun.SetItalic(!!formatState.italic); } catch(e) {}
+											try { oRun.SetUnderline(!!formatState.underline); } catch(e) {}
+											try { oRun.SetStrikeout(!!formatState.strikeout); } catch(e) {}
+											try { oRun.SetDoubleStrikeout(!!formatState.doubleStrikeout); } catch(e) {}
+											try { oRun.SetSmallCaps(!!formatState.smallCaps); } catch(e) {}
+											try { oRun.SetCaps(!!formatState.caps); } catch(e) {}
+											try { oRun.SetSubscript(!!formatState.subscript); } catch(e) {}
+											try { oRun.SetSuperscript(!!formatState.superscript); } catch(e) {}
+											try { if (formatState.characterSpacing) oRun.SetSpacing(formatState.characterSpacing); } catch(e) {}
+											if (formatState.highlight) {
+												try {
+													var hl = formatState.highlight.toLowerCase().trim();
+													if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
+													else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
+													else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
+													else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
+													else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
+													else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
+													else if (hl.indexOf("magenta") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
+													else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
+													else oRun.SetHighlight(hl);
+												} catch(eHighlight) {}
+											}
+											if (formatState.color) {
+												try {
+													var hex = String(formatState.color).replace('#', '').trim();
+													if (hex.length === 6) {
+														var red = parseInt(hex.substring(0, 2), 16);
+														var green = parseInt(hex.substring(2, 4), 16);
+														var blue = parseInt(hex.substring(4, 6), 16);
+														try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+															try { oRun.SetColor(red, green, blue); } catch(errHex) {}
+														}
+													} else {
+														var namedColors = {
+															"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+															"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+															"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+														};
+														if (namedColors[hex.toLowerCase()]) {
+															var rgb = namedColors[hex.toLowerCase()];
+															oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+														}
+													}
+												} catch(eColorOuter) {}
+											}
+										}
+									}
+								}
+							};
 							
 							// Clamp index to prevent out-of-bounds target formatting references
 							if (actualTargetIndex >= countBefore) {

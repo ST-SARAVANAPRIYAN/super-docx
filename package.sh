@@ -6,6 +6,8 @@ set -e
 echo "Packaging ONLYOFFICE OneScript plugin..."
 if [ -d "plugin" ]; then
     mkdir -p releases
+    # Inject timestamp cache-buster for plugin.js in index.html
+    sed -i -E 's/src="plugin.js(\?v=[0-9]+)?"/src="plugin.js?v='$(date +%s)'"/g' plugin/index.html
     cd plugin
     # Check if zip is installed, fallback to python if not
     if command -v zip >/dev/null 2>&1; then
