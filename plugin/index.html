@@ -3,80 +3,73 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>OneScript</title>
+	<title>OneScript AI IDE</title>
 	<link rel="stylesheet" href="./../v1/plugins.css">
 	<style>
 		@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 		:root {
-			/* Fonts, radii, and shadows fallback */
-			--font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-			--font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-			--border-radius-boxy: 8px;
-			--border-radius-card: 12px;
-			--success: #10B981;
-			--error: #EF4444;
-			--warning: #F59E0B;
-			--info: #3B82F6;
+			/* Typography and Layout Constants */
+			--font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+			--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+			--border-radius-sm: 4px;
+			--border-radius-md: 8px;
+			--border-radius-lg: 12px;
+			--border-radius-full: 99px;
+			
+			/* Tokyo Night Premium Dark Theme Palette */
+			--bg-base: #0a0e17;
+			--bg-sidebar: #101424;
+			--bg-surface: #14192d;
+			--bg-card: #1c233c;
+			--bg-input: #060912;
+			--border-color: rgba(255, 255, 255, 0.08);
+			--border-accent: #7aa2f7;
+			--text-primary: #c0caf5;
+			--text-secondary: #9099bd;
+			--text-muted: #565f89;
+			--primary: #7aa2f7;
+			--primary-hover: #568af2;
+			--primary-glow: rgba(122, 162, 247, 0.15);
+			--accent-purple: #bb9af7;
+			--accent-cyan: #2ac3de;
+			--accent-green: #10b981;
+			--success: #10b981;
+			--error: #f7768e;
+			--warning: #e0af68;
+			--info: #7aa2f7;
+			--shadow-boxy: 0 8px 30px rgba(0, 0, 0, 0.4);
+			--shadow-glow: 0 0 15px rgba(122, 162, 247, 0.2);
+			--transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 		}
 
-		/* Premium dark theme by default (OneScript theme) */
-		body {
-			--bg-base: var(--background-normal, #0B0F19);
-			--bg-surface: var(--background-toolbar, var(--background-normal, #151D30));
-			--bg-card: var(--background-normal, #1E293B);
-			--bg-input: var(--background-normal, #0F172A);
-			--border-color: var(--border-normal, rgba(255, 255, 255, 0.08));
-			--border-accent: var(--highlight-color, #6366F1);
-			--text-primary: var(--text-normal, #F8FAFC);
-			--text-secondary: var(--text-muted, var(--text-normal, #94A3B8));
-			--text-muted: var(--text-muted, #64748B);
-			--primary: var(--highlight-color, #6366F1);
-			--primary-hover: var(--highlight-color-hover, #4F46E5);
-			--primary-glow: rgba(99, 102, 241, 0.15);
-			--accent-purple: #8B5CF6;
-			--shadow-boxy: 0 4px 20px rgba(0, 0, 0, 0.25);
-			--shadow-boxy-hover: 0 6px 30px rgba(0, 0, 0, 0.35);
-		}
-
-		/* Explicit light theme */
+		/* Premium Tailored Light Theme Palette */
 		body.theme-light {
-			--bg-base: var(--background-normal, #F8FAFC);
-			--bg-surface: var(--background-toolbar, var(--background-normal, #FFFFFF));
-			--bg-card: var(--background-normal, #F1F5F9);
-			--bg-input: var(--background-normal, #FFFFFF);
-			--border-color: var(--border-normal, rgba(0, 0, 0, 0.08));
-			--border-accent: var(--highlight-color, #4F46E5);
-			--text-primary: var(--text-normal, #0F172A);
-			--text-secondary: var(--text-muted, var(--text-normal, #475569));
-			--text-muted: var(--text-muted, #94A3B8);
-			--primary: var(--highlight-color, #4F46E5);
-			--primary-hover: var(--highlight-color-hover, #3730A3);
-			--primary-glow: rgba(79, 70, 229, 0.08);
-			--accent-purple: #7C3AED;
-			--shadow-boxy: 0 4px 16px rgba(0, 0, 0, 0.06);
-			--shadow-boxy-hover: 0 6px 24px rgba(0, 0, 0, 0.1);
+			--bg-base: #f1f5f9;
+			--bg-sidebar: #e2e8f0;
+			--bg-surface: #ffffff;
+			--bg-card: #f8fafc;
+			--bg-input: #f1f5f9;
+			--border-color: rgba(0, 0, 0, 0.08);
+			--border-accent: #4f46e5;
+			--text-primary: #0f172a;
+			--text-secondary: #475569;
+			--text-muted: #94a3b8;
+			--primary: #4f46e5;
+			--primary-hover: #4338ca;
+			--primary-glow: rgba(79, 70, 229, 0.10);
+			--accent-purple: #7c3aed;
+			--accent-cyan: #0891b2;
+			--accent-green: #10b981;
+			--success: #10b981;
+			--error: #ef4444;
+			--warning: #f59e0b;
+			--info: #3b82f6;
+			--shadow-boxy: 0 4px 20px rgba(0, 0, 0, 0.06);
+			--shadow-glow: 0 0 10px rgba(79, 70, 229, 0.1);
 		}
 
-		/* Explicit dark theme */
-		body.theme-dark {
-			--bg-base: var(--background-normal, #0B0F19);
-			--bg-surface: var(--background-toolbar, var(--background-normal, #151D30));
-			--bg-card: var(--background-normal, #1E293B);
-			--bg-input: var(--background-normal, #0F172A);
-			--border-color: var(--border-normal, rgba(255, 255, 255, 0.08));
-			--border-accent: var(--highlight-color, #6366F1);
-			--text-primary: var(--text-normal, #F8FAFC);
-			--text-secondary: var(--text-muted, var(--text-normal, #94A3B8));
-			--text-muted: var(--text-muted, #64748B);
-			--primary: var(--highlight-color, #6366F1);
-			--primary-hover: var(--highlight-color-hover, #4F46E5);
-			--primary-glow: rgba(99, 102, 241, 0.15);
-			--accent-purple: #8B5CF6;
-			--shadow-boxy: 0 4px 20px rgba(0, 0, 0, 0.25);
-			--shadow-boxy-hover: 0 6px 30px rgba(0, 0, 0, 0.35);
-		}
-
+		/* Core Layout Reset */
 		* {
 			box-sizing: border-box;
 			margin: 0;
@@ -94,7 +87,7 @@
 
 		::-webkit-scrollbar-thumb {
 			background: rgba(255, 255, 255, 0.1);
-			border-radius: 99px;
+			border-radius: var(--border-radius-full);
 		}
 
 		body.theme-light ::-webkit-scrollbar-thumb {
@@ -112,109 +105,351 @@
 			font-size: 11.5px;
 			line-height: 1.5;
 			height: 100vh;
-			display: flex;
-			flex-direction: column;
+			width: 100vw;
 			overflow: hidden;
+			display: flex;
 			transition: background-color 0.2s ease, color 0.2s ease;
 		}
 
-		/* Header and Tabs */
-		.header {
-			padding: 14px 16px 8px 16px;
-			border-bottom: 1px solid var(--border-color);
-			flex-shrink: 0;
-			background: var(--bg-surface);
+		/* Master App layout container */
+		.app-container {
+			display: flex;
+			flex-direction: row;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+		}
+
+		/* Left-hand vertical navigation sidebar (IDE Layout) */
+		.sidebar-activity {
+			width: 48px;
+			background-color: var(--bg-sidebar);
+			border-right: 1px solid var(--border-color);
 			display: flex;
 			flex-direction: column;
-			gap: 12px;
-		}
-
-		.logo-container {
-			display: flex;
 			align-items: center;
 			justify-content: space-between;
+			padding: 14px 0;
+			flex-shrink: 0;
+			z-index: 10;
 		}
 
-		.logo-title {
-			font-size: 15px;
-			font-weight: 800;
-			font-family: var(--font-sans);
-			letter-spacing: -0.02em;
+		.activity-top, .activity-bottom {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 14px;
+			width: 100%;
+		}
+
+		.sidebar-logo {
+			margin-bottom: 10px;
+			opacity: 0.9;
 			display: flex;
 			align-items: center;
-			gap: 8px;
-			color: var(--text-primary);
+			justify-content: center;
+			color: var(--primary);
+			filter: drop-shadow(0 0 5px var(--primary-glow));
 		}
 
-		body.theme-dark .logo-title {
-			background: linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 100%);
-			-webkit-background-clip: text;
-			-webkit-text-fill-color: transparent;
-		}
-
-		/* pulsing agent status badge */
-		.status-badge {
-			display: inline-flex;
-			align-items: center;
-			gap: 5px;
-			font-size: 9.5px;
-			font-weight: 600;
-			color: var(--success);
-			background: rgba(16, 185, 129, 0.1);
-			padding: 2px 8px;
-			border-radius: 99px;
-			border: 1px solid rgba(16, 185, 129, 0.15);
-		}
-
-		.status-pulse {
-			width: 6px;
-			height: 6px;
-			background-color: var(--success);
-			border-radius: 50%;
-			box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
-			animation: pulse 1.8s infinite;
-		}
-
-		@keyframes pulse {
-			0% {
-				transform: scale(0.95);
-				box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
-			}
-			70% {
-				transform: scale(1);
-				box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
-			}
-			100% {
-				transform: scale(0.95);
-				box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-			}
-		}
-
-		.badge {
-			font-size: 9px;
-			background: rgba(255, 255, 255, 0.05);
+		.activity-btn {
+			background: transparent;
+			border: none;
 			color: var(--text-secondary);
-			padding: 2px 6px;
-			border-radius: 4px;
-			border: 1px solid var(--border-color);
-			font-weight: 600;
-			text-transform: uppercase;
-			font-family: var(--font-mono);
-		}
-
-		.tool-icon-btn {
-			background: rgba(255, 255, 255, 0.02);
-			border: 1px solid var(--border-color);
-			color: var(--text-primary);
-			border-radius: var(--border-radius-boxy);
-			width: 26px;
-			height: 26px;
+			width: 32px;
+			height: 32px;
+			border-radius: var(--border-radius-md);
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			cursor: pointer;
+			position: relative;
+			transition: var(--transition);
+		}
+
+		.activity-btn:hover {
+			color: var(--text-primary);
+			background-color: rgba(255, 255, 255, 0.04);
+		}
+
+		body.theme-light .activity-btn:hover {
+			background-color: rgba(0, 0, 0, 0.03);
+		}
+
+		.activity-btn.active {
+			color: var(--primary);
+			background-color: var(--primary-glow);
+		}
+
+		.activity-btn.active::before {
+			content: '';
+			position: absolute;
+			left: 0;
+			top: 6px;
+			bottom: 6px;
+			width: 3px;
+			background-color: var(--primary);
+			border-radius: 0 4px 4px 0;
+		}
+
+		/* Main Content Workspace layout */
+		.main-workspace {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+			background-color: var(--bg-base);
+			position: relative;
+		}
+
+		/* Universal Header */
+		.main-header {
+			height: 44px;
+			padding: 0 14px;
+			border-bottom: 1px solid var(--border-color);
+			background-color: var(--bg-surface);
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			flex-shrink: 0;
+		}
+
+		.header-title {
+			font-size: 12.5px;
+			font-weight: 700;
+			letter-spacing: -0.01em;
+			color: var(--text-primary);
+		}
+
+		.header-actions {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+
+		.header-icon-btn {
+			background: rgba(255, 255, 255, 0.02);
+			border: 1px solid var(--border-color);
+			color: var(--text-secondary);
+			border-radius: var(--border-radius-sm);
+			width: 22px;
+			height: 22px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			transition: var(--transition);
+		}
+
+		.header-icon-btn:hover {
+			background: rgba(255, 255, 255, 0.06);
+			border-color: var(--primary);
+			color: var(--primary);
+		}
+
+		.badge-cost {
+			font-size: 9px;
+			font-weight: 700;
+			padding: 2px 6px;
+			border-radius: var(--border-radius-sm);
+			border: 1px solid var(--border-color);
+			font-family: var(--font-mono);
+			text-transform: uppercase;
+			background-color: rgba(0, 0, 0, 0.1);
+			color: var(--text-secondary);
+		}
+
+		.status-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			font-size: 9px;
+			font-weight: 700;
+			color: var(--accent-green);
+			background: rgba(16, 185, 129, 0.08);
+			padding: 2px 6px;
+			border-radius: var(--border-radius-full);
+			border: 1px solid rgba(16, 185, 129, 0.15);
+		}
+
+		.status-pulse {
+			width: 5px;
+			height: 5px;
+			background-color: var(--accent-green);
+			border-radius: 50%;
+			box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+			animation: pulse 1.8s infinite;
+		}
+
+		@keyframes pulse {
+			0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+			70% { transform: scale(1); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+			100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+		}
+
+		/* Content Panes Manager */
+		.content-container {
+			flex: 1;
+			overflow: hidden;
+			position: relative;
+		}
+
+		.view-pane {
+			display: none;
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			flex-direction: column;
+			padding: 10px;
+			overflow: hidden;
+		}
+
+		.view-pane.active {
+			display: flex;
+		}
+
+		/* View Headings & Actions Inside Pane */
+		.view-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 8px;
+			flex-shrink: 0;
+		}
+
+		.view-header-title {
 			font-size: 11px;
-			transition: all 0.15s ease;
+			font-weight: 700;
+			color: var(--primary);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+
+		.view-header-actions {
+			display: flex;
+			gap: 4px;
+		}
+
+		.header-action-btn {
+			background: transparent;
+			border: 1px solid var(--border-color);
+			color: var(--text-secondary);
+			font-size: 9px;
+			font-weight: 600;
+			padding: 2px 6px;
+			border-radius: var(--border-radius-sm);
+			cursor: pointer;
+			font-family: var(--font-sans);
+			transition: var(--transition);
+		}
+
+		.header-action-btn:hover {
+			color: var(--text-primary);
+			border-color: var(--primary);
+			background-color: rgba(255, 255, 255, 0.02);
+		}
+
+		.header-action-btn.active {
+			background-color: var(--primary);
+			color: #ffffff;
+			border-color: var(--primary);
+		}
+
+		/* Premium Card Layouts */
+		.card {
+			background-color: var(--bg-surface);
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius-lg);
+			padding: 12px;
+			margin-bottom: 10px;
+			box-shadow: var(--shadow-boxy);
+			transition: border-color 0.2s, box-shadow 0.2s;
+		}
+
+		.card:hover {
+			border-color: rgba(122, 162, 247, 0.2);
+		}
+
+		.card-title {
+			font-size: 10.5px;
+			font-weight: 700;
+			color: var(--primary);
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			margin-bottom: 10px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+
+		/* Form Elements Styling */
+		.form-group {
+			margin-bottom: 10px;
+		}
+
+		.form-group:last-child {
+			margin-bottom: 0;
+		}
+
+		label {
+			display: block;
+			font-size: 10.5px;
+			font-weight: 600;
+			color: var(--text-secondary);
+			margin-bottom: 5px;
+		}
+
+		.input-container {
+			position: relative;
+			display: flex;
+			width: 100%;
+		}
+
+		input[type="text"], input[type="password"], select, textarea {
+			width: 100%;
+			background-color: var(--bg-input);
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius-md);
+			color: var(--text-primary);
+			padding: 6px 10px;
+			font-family: var(--font-sans);
+			font-size: 11px;
+			outline: none;
+			transition: border-color 0.15s, box-shadow 0.15s;
+		}
+
+		input:focus, select:focus, textarea:focus {
+			border-color: var(--primary);
+			box-shadow: 0 0 0 2.5px var(--primary-glow);
+		}
+
+		/* Dynamic Context Toolbar inside Chat Pane */
+		#context-toolbar {
+			padding: 8px 10px;
+			border-radius: var(--border-radius-md);
+			margin-bottom: 8px;
+			background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(20, 25, 45, 0.8) 100%);
+			box-shadow: var(--shadow-glow);
+			border: 1px solid rgba(122, 162, 247, 0.15);
+		}
+
+		/* Button layout icons */
+		.tool-icon-btn {
+			background: rgba(255, 255, 255, 0.03);
+			border: 1px solid var(--border-color);
+			color: var(--text-primary);
+			border-radius: var(--border-radius-sm);
+			width: 24px;
+			height: 24px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			font-size: 10px;
+			font-weight: bold;
+			transition: var(--transition);
 		}
 
 		.tool-icon-btn:hover {
@@ -229,304 +464,37 @@
 			color: var(--primary);
 		}
 
-		.tabs {
-			display: flex;
-			gap: 4px;
-			background: rgba(0, 0, 0, 0.15);
-			padding: 3px;
-			border-radius: 8px;
-			border: 1px solid var(--border-color);
-		}
-
-		body.theme-light .tabs {
-			background: rgba(0, 0, 0, 0.04);
-		}
-
-		.tab-btn {
-			flex: 1;
-			background: transparent;
-			border: none;
-			color: var(--text-secondary);
-			padding: 6px 12px;
-			font-size: 11.5px;
-			font-weight: 600;
-			font-family: var(--font-sans);
-			border-radius: 6px;
-			cursor: pointer;
-			text-align: center;
-			transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-		}
-
-		.tab-btn:hover {
-			color: var(--text-primary);
-			background: rgba(255, 255, 255, 0.03);
-		}
-
-		body.theme-light .tab-btn:hover {
-			background: rgba(0, 0, 0, 0.02);
-		}
-
-		.tab-btn.active {
-			background: var(--primary);
-			color: #ffffff;
-			box-shadow: 0 2px 10px rgba(99, 102, 241, 0.25);
-		}
-
-		/* Main Content Layout */
-		.content-container {
-			flex: 1;
-			overflow: hidden;
-			padding: 8px;
-			display: flex;
-			flex-direction: column;
-			gap: 8px;
-			background: var(--bg-base);
-		}
-
-		.view-pane {
-			display: none;
-			flex-direction: column;
-			gap: 8px;
-			height: 100%;
-			overflow: hidden;
-		}
-
-		#view-settings {
-			overflow-y: auto;
-			padding-right: 4px;
-		}
-
-		.view-pane.active {
-			display: flex;
-			flex-direction: column;
-			height: 100%;
-			overflow: hidden;
-		}
-
-		/* Flat Cards */
-		.card {
-			background: var(--bg-surface);
-			border: 1px solid var(--border-color);
-			border-radius: var(--border-radius-card);
-			padding: 10px;
-			position: relative;
-			box-shadow: var(--shadow-boxy);
-			transition: box-shadow 0.2s ease, border-color 0.2s ease;
-		}
-
-		.card:hover {
-			box-shadow: var(--shadow-boxy-hover);
-		}
-
-		.card-title {
-			font-size: 11px;
-			font-weight: 700;
-			color: var(--primary);
-			text-transform: uppercase;
-			letter-spacing: 0.06em;
-			margin-bottom: 12px;
-			font-family: var(--font-sans);
-			display: flex;
-			align-items: center;
-			gap: 6px;
-		}
-
-		.card-title::before {
-			content: "✦";
-			color: var(--primary);
-			font-size: 11px;
-		}
-
-		/* Form elements */
-		.form-group {
-			margin-bottom: 8px;
-		}
-
-		.form-group:last-child {
-			margin-bottom: 0;
-		}
-
-		label {
-			display: block;
-			font-size: 11px;
-			font-weight: 600;
-			color: var(--text-secondary);
-			margin-bottom: 6px;
-			font-family: var(--font-sans);
-		}
-
-		.input-container {
-			position: relative;
-			display: flex;
-			width: 100%;
-		}
-
-		input[type="text"], input[type="password"], select, textarea {
-			width: 100%;
-			background: var(--bg-input);
-			border: 1px solid var(--border-color);
-			border-radius: var(--border-radius-boxy);
-			color: var(--text-primary);
-			padding: 5px 8px;
-			font-family: var(--font-sans);
-			font-size: 11px;
-			outline: none;
-			transition: border-color 0.15s ease, box-shadow 0.15s ease;
-		}
-
-		input[type="password"] {
-			padding-right: 40px;
-		}
-
-		input:focus, select:focus, textarea:focus {
-			border-color: var(--primary);
-			box-shadow: 0 0 0 2.5px var(--primary-glow);
-		}
-
-		/* Range selector button style */
-		.range-selector {
-			display: flex;
-			background: rgba(0, 0, 0, 0.15);
-			border: 1px solid var(--border-color);
-			padding: 3px;
-			border-radius: var(--border-radius-boxy);
-			margin-bottom: 8px;
-		}
-
-		.range-btn {
-			flex: 1;
-			background: transparent;
-			border: none;
-			color: var(--text-secondary);
-			font-size: 11px;
-			font-weight: 600;
-			font-family: var(--font-sans);
-			padding: 5px;
-			border-radius: 5px;
-			cursor: pointer;
-			transition: all 0.15s ease;
-		}
-
-		.range-btn.active {
-			background: var(--bg-surface);
-			color: var(--primary);
-			border: 1px solid var(--border-color);
-			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-		}
-
-		/* Show/Hide password toggle icon */
-		.eye-icon {
-			position: absolute;
-			right: 12px;
-			top: 50%;
-			transform: translateY(-50%);
-			cursor: pointer;
-			color: var(--text-secondary);
-			font-size: 10px;
-			font-weight: 700;
-			user-select: none;
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-		}
-
-		.eye-icon:hover {
-			color: var(--primary);
-		}
-
-		/* API Buttons Layout */
-		.btn-group {
-			display: flex;
-			gap: 10px;
-			margin-top: 12px;
-		}
-
-		/* Styling Suggestions */
-		textarea {
-			resize: none;
-			height: 80px;
-		}
-
-		/* Suggestion chips */
-		.suggestion-container {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 6px;
-			margin-top: 14px;
-			justify-content: center;
-			width: 100%;
-		}
-
-		.chip {
-			background: rgba(255, 255, 255, 0.03);
-			border: 1px solid var(--border-color);
-			color: var(--text-secondary);
-			padding: 4px 8px;
-			border-radius: 99px;
-			font-size: 10px;
-			font-weight: 500;
-			cursor: pointer;
-			transition: all 0.2s ease;
-			backdrop-filter: blur(4px);
-		}
-
-		body:not(.theme-dark) .chip {
-			background: rgba(0, 0, 0, 0.02);
-		}
-
-		.chip:hover {
-			background: rgba(99, 102, 241, 0.08);
-			color: var(--primary);
-			border-color: var(--primary);
-			transform: translateY(-1.5px);
-			box-shadow: 0 4px 10px rgba(99, 102, 241, 0.15);
-		}
-
-		.chip-special {
-			background: var(--primary-glow);
-			border-color: var(--primary);
-			color: var(--primary);
-			font-weight: 600;
-		}
-
-		.chip-special:hover {
-			background: var(--primary);
-			color: #ffffff;
-			box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-		}
-
-		/* Premium flat buttons */
+		/* Custom Buttons Styling */
 		.btn {
 			width: 100%;
-			background: var(--primary);
+			background-color: var(--primary);
 			color: #ffffff;
 			border: 1px solid transparent;
-			border-radius: var(--border-radius-boxy);
-			padding: 9px 14px;
+			border-radius: var(--border-radius-md);
+			padding: 8px 12px;
 			font-weight: 600;
-			font-size: 11.5px;
+			font-size: 11px;
 			font-family: var(--font-sans);
 			cursor: pointer;
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			gap: 8px;
-			transition: all 0.15s ease;
-			box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+			gap: 6px;
+			transition: var(--transition);
 		}
 
 		.btn:hover {
-			background: var(--primary-hover);
-			box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
-			transform: translateY(-1px);
+			background-color: var(--primary-hover);
+			box-shadow: 0 4px 12px var(--primary-glow);
+			transform: translateY(-0.5px);
 		}
 
 		.btn:active {
 			transform: translateY(0);
-			box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
 		}
 
 		.btn:disabled {
-			background: rgba(255, 255, 255, 0.03);
+			background-color: rgba(255, 255, 255, 0.02);
 			color: var(--text-muted);
 			border-color: var(--border-color);
 			cursor: not-allowed;
@@ -535,261 +503,152 @@
 		}
 
 		.btn-outline {
-			background: transparent;
+			background-color: transparent;
 			border: 1px solid var(--border-color);
 			color: var(--text-primary);
-			box-shadow: none;
 		}
 
 		.btn-outline:hover {
-			background: rgba(255, 255, 255, 0.03);
+			background-color: rgba(255, 255, 255, 0.03);
 			border-color: var(--text-secondary);
-			box-shadow: none;
 		}
 
-		body:not(.theme-dark) .btn-outline:hover {
-			background: rgba(0, 0, 0, 0.02);
-		}
-
-		.btn-outline.active {
-			background: var(--primary-glow);
-			border-color: var(--primary);
-			color: var(--primary);
+		body.theme-light .btn-outline:hover {
+			background-color: rgba(0, 0, 0, 0.02);
 		}
 
 		.btn-danger {
-			background: transparent;
+			background-color: transparent;
 			color: var(--error);
 			border: 1px solid var(--error);
-			box-shadow: none;
 		}
 
 		.btn-danger:hover {
-			background: var(--error);
+			background-color: var(--error);
 			color: #ffffff;
 			border-color: transparent;
-			box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+			box-shadow: 0 4px 10px rgba(247, 118, 142, 0.2);
 		}
 
-		/* Checkpoints Item list styling */
-		.checkpoint-item {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			padding: 8px 10px;
-			background: rgba(0, 0, 0, 0.15);
-			border: 1px solid var(--border-color);
-			border-radius: var(--border-radius-boxy);
-			font-size: 11.5px;
-			font-family: var(--font-sans);
-		}
-
-		.checkpoint-item:hover {
-			border-color: var(--text-secondary);
-		}
-
-		.checkpoint-restore-btn {
-			background: var(--primary-glow);
-			border: 1px solid var(--primary);
-			color: var(--primary);
-			padding: 3px 8px;
-			border-radius: 4px;
-			font-size: 10.5px;
-			cursor: pointer;
-			font-weight: 600;
-			font-family: var(--font-sans);
-			transition: all 0.15s ease;
-		}
-
-		.checkpoint-restore-btn:hover {
-			background: var(--primary);
-			color: #ffffff;
-		}
-
-		/* Unified Dev Console */
-		.log-header {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			margin-bottom: 8px;
-		}
-
-		.log-container {
-			flex: 1;
-			min-height: 100px;
-			max-height: 140px;
-			overflow-y: auto;
-			font-family: var(--font-mono);
-			font-size: 11px;
-			background: rgba(0, 0, 0, 0.25);
-			border: 1px solid var(--border-color);
-			border-radius: var(--border-radius-boxy);
-			padding: 10px;
-		}
-
-		.log-entry {
-			margin-bottom: 5px;
-			color: var(--text-secondary);
-			line-height: 1.5;
-			border-left: 2.5px solid var(--border-color);
-			padding-left: 8px;
-		}
-
-		.log-entry.success { border-left-color: var(--success); color: var(--success); }
-		.log-entry.error { border-left-color: var(--error); color: var(--error); }
-		.log-entry.info { border-left-color: var(--info); color: var(--info); }
-		.log-entry.warning { border-left-color: var(--warning); color: var(--warning); }
-
-		/* Preview / Proposed Changes Panel */
-		.review-item {
-			padding: 10px;
-			background: rgba(0, 0, 0, 0.15);
-			border: 1px solid var(--border-color);
-			border-radius: var(--border-radius-boxy);
-			margin-bottom: 8px;
-			font-size: 11px;
-			font-family: var(--font-mono);
-		}
-
-		.review-item:last-child {
-			margin-bottom: 0;
-		}
-
-		.diff-original {
-			color: var(--error);
-			text-decoration: line-through;
-			font-size: 11px;
-			margin-top: 5px;
-		}
-
-		.diff-new {
-			color: var(--success);
-			font-weight: 500;
-			margin-top: 3px;
-		}
-
-		.badge-action {
-			font-size: 9.5px;
-			font-weight: 700;
-			padding: 2px 6px;
-			border-radius: 4px;
-			text-transform: uppercase;
-			display: inline-block;
-			margin-bottom: 5px;
-			font-family: var(--font-sans);
-		}
-
-		.action-modify { background: rgba(59, 130, 246, 0.12); color: var(--info); }
-		.action-create { background: rgba(16, 185, 129, 0.12); color: var(--success); }
-		.action-delete { background: rgba(239, 110, 110, 0.12); color: var(--error); }
-
-		/* Spinner */
-		.spinner {
-			width: 14px;
-			height: 14px;
-			border: 2.5px solid rgba(255, 255, 255, 0.25);
-			border-top-color: currentColor;
-			border-radius: 50%;
-			animation: spin 0.8s linear infinite;
-			display: none;
-		}
-
-		.btn.loading .spinner,
-		.btn-circle.loading .spinner {
-			display: inline-block;
-		}
-
-		@keyframes spin {
-			to { transform: rotate(360deg); }
-		}
-
-		/* Welcome Screen Layout */
+		/* Dynamic Chat Welcome Screen */
 		.chat-welcome {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
 			text-align: center;
-			padding: 16px 8px;
+			padding: 24px 10px;
 			margin: auto 0;
 		}
 
-		/* Clean welcome header styling */
 		.welcome-icon {
-			margin-bottom: 14px;
+			margin-bottom: 12px;
 			color: var(--primary);
+			filter: drop-shadow(0 0 8px var(--primary-glow));
 		}
 
-		/* Chat Interface Styles */
+		.suggestion-container {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 5px;
+			margin-top: 14px;
+			justify-content: center;
+			width: 100%;
+		}
+
+		.chip {
+			background-color: rgba(255, 255, 255, 0.02);
+			border: 1px solid var(--border-color);
+			color: var(--text-secondary);
+			padding: 4px 8px;
+			border-radius: var(--border-radius-full);
+			font-size: 9.5px;
+			font-weight: 500;
+			cursor: pointer;
+			transition: var(--transition);
+		}
+
+		body.theme-light .chip {
+			background-color: rgba(0, 0, 0, 0.02);
+		}
+
+		.chip:hover {
+			background-color: var(--primary-glow);
+			color: var(--primary);
+			border-color: var(--primary);
+			transform: translateY(-1px);
+		}
+
+		.chip-special {
+			background-color: var(--primary-glow);
+			border-color: var(--primary);
+			color: var(--primary);
+			font-weight: 600;
+		}
+
+		.chip-special:hover {
+			background-color: var(--primary);
+			color: #ffffff;
+			box-shadow: 0 4px 10px var(--primary-glow);
+		}
+
+		/* Conversational Layout */
 		.chat-message {
 			display: flex;
 			flex-direction: column;
 			max-width: 100%;
-			padding: 6px 10px;
-			border-radius: var(--border-radius-card);
+			padding: 8px 10px;
+			border-radius: var(--border-radius-lg);
 			font-size: 11px;
-			line-height: 1.4;
+			line-height: 1.45;
 			position: relative;
-			animation: slideUp 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+			animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 		}
 
 		@keyframes slideUp {
-			from { opacity: 0; transform: translateY(8px); }
+			from { opacity: 0; transform: translateY(6px); }
 			to { opacity: 1; transform: translateY(0); }
 		}
 
 		.chat-message.user {
 			align-self: flex-end;
-			background: #242b35;
-			border: 1px solid #3b4252;
+			background-color: var(--bg-card);
+			border: 1px solid var(--border-color);
 			color: var(--text-primary);
-			border-bottom-right-radius: 3px;
-			box-shadow: none;
-		}
-
-		body:not(.theme-dark) .chat-message.user {
-			background: #f0f4f8;
-			border-color: #d3dfe9;
+			border-bottom-right-radius: 2px;
 		}
 
 		.chat-message.ai {
 			align-self: flex-start;
-			background: #1e242c;
-			border: 1px solid #2e3440;
+			background-color: var(--bg-surface);
+			border: 1px solid var(--border-color);
 			color: var(--text-primary);
-			border-bottom-left-radius: 3px;
-			box-shadow: none;
-			padding-left: 42px; /* Space for Avatar */
+			border-bottom-left-radius: 2px;
+			padding-left: 36px;
 		}
 
-		body:not(.theme-dark) .chat-message.ai {
-			background: #f8f9fa;
-			border-color: #e5e9f0;
-		}
-
-		/* AI message avatar representation */
 		.chat-message.ai::before {
 			content: '';
 			position: absolute;
-			left: 10px;
-			top: 10px;
-			width: 24px;
-			height: 24px;
+			left: 8px;
+			top: 8px;
+			width: 20px;
+			height: 20px;
 			border-radius: 50%;
-			background: var(--primary);
-			box-shadow: none;
+			background-color: var(--primary);
 			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5z'/%3E%3Cpath d='M2 17l10 5 10-5'/%3E%3Cpath d='M2 12l10 5 10-5'/%3E%3C/svg%3E");
-			background-size: 13px;
+			background-size: 10px;
 			background-repeat: no-repeat;
 			background-position: center;
+			box-shadow: 0 0 6px var(--primary-glow);
 		}
 
 		.chat-message .message-header {
-			font-size: 9.5px;
+			font-size: 9px;
 			font-weight: 700;
 			text-transform: uppercase;
 			letter-spacing: 0.05em;
-			margin-bottom: 6px;
+			margin-bottom: 4px;
 		}
 
 		.chat-message.user .message-header {
@@ -806,37 +665,89 @@
 			white-space: pre-wrap;
 		}
 
-		/* Custom scrollbar adjustments for chat history */
-		#chat-history::-webkit-scrollbar {
-			width: 4px;
+		/* Slash Command Autocomplete overlay */
+		.slash-menu {
+			position: absolute;
+			bottom: 48px;
+			left: 10px;
+			right: 10px;
+			background-color: var(--bg-surface);
+			border: 1px solid var(--primary);
+			border-radius: var(--border-radius-md);
+			box-shadow: var(--shadow-boxy);
+			z-index: 100;
+			max-height: 150px;
+			overflow-y: auto;
+			padding: 4px;
+			backdrop-filter: blur(8px);
 		}
 
-		/* Redesigned Input Card */
-		.input-card {
-			background: var(--bg-surface);
-			border: 1px solid var(--border-color);
-			border-radius: 20px;
-			padding: 6px 12px;
+		.slash-item {
 			display: flex;
 			align-items: center;
-			gap: 8px;
-			box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+			justify-content: space-between;
+			padding: 6px 10px;
+			border-radius: var(--border-radius-sm);
+			cursor: pointer;
+			transition: var(--transition);
+		}
+
+		.slash-item:hover, .slash-item.selected {
+			background-color: var(--primary-glow);
+		}
+
+		.slash-cmd {
+			font-weight: 700;
+			color: var(--primary);
+			font-family: var(--font-mono);
+			font-size: 10.5px;
+		}
+
+		.slash-desc {
+			font-size: 9.5px;
+			color: var(--text-secondary);
+		}
+
+		/* Capsule Prompt Input Container */
+		.input-card {
+			background-color: var(--bg-surface);
+			border: 1px solid var(--border-color);
+			border-radius: 16px;
+			padding: 4px 10px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 			transition: border-color 0.2s, box-shadow 0.2s;
 			flex-shrink: 0;
-			margin-bottom: 6px;
+			position: relative;
 		}
 
 		.input-card:focus-within {
 			border-color: var(--primary);
-			box-shadow: 0 0 0 3px var(--primary-glow), 0 6px 20px rgba(0, 0, 0, 0.25);
+			box-shadow: 0 0 0 2px var(--primary-glow), 0 4px 20px rgba(0, 0, 0, 0.2);
+		}
+
+		/* Selection range status badge inside capsule input */
+		.prompt-scope-badge {
+			font-size: 8.5px;
+			font-weight: 700;
+			text-transform: uppercase;
+			padding: 2px 5px;
+			background-color: var(--primary-glow);
+			border: 1px solid rgba(122, 162, 247, 0.3);
+			color: var(--primary);
+			border-radius: 4px;
+			white-space: nowrap;
+			user-select: none;
 		}
 
 		.input-card textarea {
 			flex: 1;
-			height: 24px;
-			padding: 4px 6px;
+			height: 22px;
+			padding: 3px 0;
 			resize: none;
-			font-size: 11.5px;
+			font-size: 11px;
 			background: transparent;
 			color: var(--text-primary);
 			border: none;
@@ -850,229 +761,756 @@
 			color: var(--text-muted);
 		}
 
-		.input-card .btn-circle {
-			width: 28px;
-			height: 28px;
-			border-radius: var(--border-radius-boxy);
-			background: var(--primary);
+		.btn-circle {
+			width: 24px;
+			height: 24px;
+			border-radius: var(--border-radius-sm);
+			background-color: var(--primary);
 			border: none;
 			color: white;
 			cursor: pointer;
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			transition: background-color 0.15s ease;
-			box-shadow: none;
+			transition: background-color 0.15s;
 			flex-shrink: 0;
 		}
 
-		.input-card .btn-circle:hover {
-			background: var(--primary-hover);
+		.btn-circle:hover {
+			background-color: var(--primary-hover);
 		}
 
-		.input-card .btn-circle:active {
-			opacity: 0.85;
+		.btn-circle-danger {
+			background-color: rgba(247, 118, 142, 0.12);
+			border: 1px solid rgba(247, 118, 142, 0.25);
+			color: var(--error);
 		}
 
-		.input-card .btn-circle-danger {
-			background: rgba(239, 68, 68, 0.15);
-			border: 1px solid rgba(239, 68, 68, 0.3);
-			color: #EF4444;
-		}
-
-		.input-card .btn-circle-danger:hover {
-			background: #EF4444;
+		.btn-circle-danger:hover {
+			background-color: var(--error);
 			color: white;
 		}
 
-		.input-card .btn-circle.loading .btn-text {
+		/* Real-Time Agentic Stepper Progress Component */
+		.agent-stepper {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			width: 100%;
+			padding: 4px 0;
+		}
+
+		.stepper-item {
+			display: flex;
+			gap: 8px;
+			align-items: flex-start;
+			opacity: 0.5;
+			transition: var(--transition);
+		}
+
+		.stepper-item.running {
+			opacity: 1;
+		}
+
+		.stepper-item.done {
+			opacity: 0.9;
+		}
+
+		.stepper-item.failed {
+			opacity: 1;
+		}
+
+		.stepper-icon-wrap {
+			flex-shrink: 0;
+			display: flex;
+			justify-content: center;
+			padding-top: 2px;
+		}
+
+		.stepper-icon {
+			width: 14px;
+			height: 14px;
+			border-radius: 50%;
+			border: 1.5px solid var(--text-muted);
+			font-size: 8px;
+			font-weight: bold;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: var(--text-muted);
+			background-color: var(--bg-surface);
+			transition: var(--transition);
+		}
+
+		.stepper-item.running .stepper-icon {
+			border-color: var(--primary);
+			color: var(--primary);
+			box-shadow: 0 0 6px var(--primary-glow);
+		}
+
+		.stepper-item.done .stepper-icon {
+			border-color: var(--success);
+			background-color: var(--success);
+			color: white;
+		}
+
+		.stepper-item.failed .stepper-icon {
+			border-color: var(--error);
+			background-color: var(--error);
+			color: white;
+		}
+
+		.stepper-spinner {
+			width: 8px;
+			height: 8px;
+			border: 1.5px solid transparent;
+			border-top-color: currentColor;
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+		}
+
+		.stepper-content {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.stepper-title {
+			font-size: 10.5px;
+			font-weight: 600;
+			color: var(--text-primary);
+		}
+
+		.stepper-item.running .stepper-title {
+			color: var(--primary);
+		}
+
+		.stepper-item.done .stepper-title {
+			color: var(--text-secondary);
+		}
+
+		.stepper-details {
+			font-size: 9px;
+			color: var(--text-secondary);
+			margin-top: 1px;
+			font-family: var(--font-mono);
+		}
+
+		.stepper-item.running .stepper-details {
+			color: var(--accent-cyan);
+		}
+
+		/* Interactive Outline Tree Elements */
+		.outline-wrapper {
+			display: flex;
+			flex-direction: column;
+			flex: 1;
+			overflow: hidden;
+			background-color: var(--bg-surface);
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius-lg);
+		}
+
+		.outline-tree {
+			flex: 1;
+			overflow-y: auto;
+			padding: 8px;
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+
+		.outline-meta-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 4px 6px;
+			background-color: rgba(0, 0, 0, 0.12);
+			border-radius: var(--border-radius-sm);
+			margin-bottom: 6px;
+			font-size: 9px;
+			font-family: var(--font-mono);
+			color: var(--text-secondary);
+			text-transform: uppercase;
+		}
+
+		.meta-mode {
+			color: var(--primary);
+			font-weight: bold;
+		}
+
+		.outline-section-node {
+			display: flex;
+			flex-direction: column;
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius-md);
+			background-color: rgba(255, 255, 255, 0.01);
+			margin-bottom: 4px;
+			overflow: hidden;
+		}
+
+		.outline-section-title {
+			display: flex;
+			align-items: center;
+			padding: 6px 8px;
+			background-color: rgba(0, 0, 0, 0.08);
+			cursor: pointer;
+			user-select: none;
+			font-weight: 700;
+			font-size: 10px;
+			transition: var(--transition);
+		}
+
+		.outline-section-title:hover {
+			background-color: rgba(255, 255, 255, 0.03);
+			color: var(--primary);
+		}
+
+		.section-caret {
+			font-size: 8px;
+			margin-right: 6px;
+			width: 8px;
+			text-align: center;
+			color: var(--text-muted);
+		}
+
+		.section-icon {
+			margin-right: 6px;
+			font-size: 10px;
+		}
+
+		.section-label {
+			flex: 1;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.outline-section-elements {
+			display: flex;
+			flex-direction: column;
+			gap: 1px;
+			padding: 4px;
+			background-color: rgba(0, 0, 0, 0.04);
+		}
+
+		.outline-el-node {
+			display: flex;
+			align-items: center;
+			padding: 5px 8px;
+			border-radius: var(--border-radius-sm);
+			cursor: pointer;
+			transition: var(--transition);
+			gap: 6px;
+		}
+
+		.outline-el-node:hover {
+			background-color: rgba(255, 255, 255, 0.03);
+		}
+
+		body.theme-light .outline-el-node:hover {
+			background-color: rgba(0, 0, 0, 0.02);
+		}
+
+		.outline-el-node.active-focus {
+			background-color: var(--primary-glow);
+			border: 1px dashed rgba(122, 162, 247, 0.4);
+		}
+
+		.outline-el-node.caret-focus {
+			border-left: 2px solid var(--accent-cyan);
+		}
+
+		.el-icon {
+			font-size: 10px;
+			color: var(--text-secondary);
+			flex-shrink: 0;
+		}
+
+		.el-text {
+			flex: 1;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			font-size: 10.5px;
+			color: var(--text-primary);
+		}
+
+		.empty-node .el-text {
+			color: var(--text-muted);
+			font-style: italic;
+		}
+
+		.heading-node {
+			background-color: rgba(187, 154, 247, 0.02);
+		}
+
+		.el-meta {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			flex-shrink: 0;
+		}
+
+		.el-badge {
+			font-size: 7.5px;
+			font-weight: bold;
+			padding: 1px 4px;
+			border-radius: 3px;
+			text-transform: uppercase;
+		}
+
+		.el-badge.heading { background-color: rgba(187, 154, 247, 0.12); color: var(--accent-purple); }
+		.el-badge.table { background-color: rgba(42, 195, 222, 0.12); color: var(--accent-cyan); }
+		.el-badge.list { background-color: rgba(122, 162, 247, 0.12); color: var(--primary); }
+
+		.el-index {
+			font-size: 8.5px;
+			font-family: var(--font-mono);
+			color: var(--text-muted);
+		}
+
+		.raw-json-viewer {
+			flex: 1;
+			font-family: var(--font-mono);
+			font-size: 10.5px;
+			background-color: rgba(5, 7, 12, 0.95);
+			color: #a5b4fc;
+			border: none;
+			padding: 10px;
+			resize: none;
+			overflow-y: auto;
+		}
+
+		.outline-loading, .outline-empty, .outline-error {
+			text-align: center;
+			padding: 20px;
+			color: var(--text-secondary);
+			font-size: 11px;
+		}
+
+		.outline-error {
+			color: var(--error);
+		}
+
+		/* VS Code Style Diff Viewer */
+		.diff-original {
+			background-color: rgba(247, 118, 142, 0.08);
+			border-left: 2.5px solid var(--error);
+			padding: 4px 6px;
+			font-family: var(--font-mono);
+			font-size: 10px;
+			color: var(--error);
+			margin: 2px 0;
+			white-space: pre-wrap;
+		}
+
+		.diff-new {
+			background-color: rgba(16, 185, 129, 0.08);
+			border-left: 2.5px solid var(--success);
+			padding: 4px 6px;
+			font-family: var(--font-mono);
+			font-size: 10px;
+			color: var(--success);
+			margin: 2px 0;
+			white-space: pre-wrap;
+		}
+
+		/* Checkpoints list layout */
+		.checkpoints-tree {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			max-height: 200px;
+			overflow-y: auto;
+		}
+
+		.checkpoint-item {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 6px 8px;
+			background-color: rgba(0, 0, 0, 0.12);
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius-md);
+		}
+
+		.checkpoint-restore-btn {
+			background-color: var(--primary-glow);
+			border: 1px solid var(--primary);
+			color: var(--primary);
+			padding: 2px 6px;
+			border-radius: var(--border-radius-sm);
+			font-size: 9.5px;
+			cursor: pointer;
+			font-weight: 600;
+			transition: var(--transition);
+		}
+
+		.checkpoint-restore-btn:hover {
+			background-color: var(--primary);
+			color: white;
+		}
+
+		/* Dev Console Styling (Mock Terminal Draw) */
+		.console-wrapper {
+			display: flex;
+			flex-direction: column;
+			flex: 1;
+			overflow: hidden;
+			background-color: var(--bg-surface);
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius-lg);
+		}
+
+		.console-tabs {
+			display: flex;
+			background-color: rgba(0, 0, 0, 0.15);
+			border-bottom: 1px solid var(--border-color);
+			padding: 2px 2px 0 2px;
+		}
+
+		.console-tab-btn {
+			background: transparent;
+			border: none;
+			border-bottom: 2px solid transparent;
+			color: var(--text-secondary);
+			padding: 5px 12px;
+			font-size: 10px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: var(--transition);
+		}
+
+		.console-tab-btn:hover {
+			color: var(--text-primary);
+		}
+
+		.console-tab-btn.active {
+			color: var(--primary);
+			border-bottom-color: var(--primary);
+		}
+
+		.console-panes {
+			flex: 1;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.console-pane {
 			display: none;
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			overflow: hidden;
+			flex-direction: column;
+			padding: 6px;
+		}
+
+		.console-pane.active {
+			display: flex;
+		}
+
+		.console-log-container {
+			flex: 1;
+			overflow-y: auto;
+			font-family: var(--font-mono);
+			font-size: 10.5px;
+			background-color: rgba(5, 7, 12, 0.95);
+			border-radius: var(--border-radius-md);
+			padding: 8px;
+		}
+
+		.log-entry {
+			margin-bottom: 4px;
+			color: var(--text-secondary);
+			line-height: 1.4;
+			border-left: 2px solid var(--border-color);
+			padding-left: 6px;
+		}
+
+		.log-entry.success { border-left-color: var(--success); color: var(--success); }
+		.log-entry.error { border-left-color: var(--error); color: var(--error); }
+		.log-entry.info { border-left-color: var(--info); color: var(--info); }
+		.log-entry.warning { border-left-color: var(--warning); color: var(--warning); }
+
+		.telemetry-pre {
+			flex: 1;
+			margin: 0;
+			background-color: rgba(5, 7, 12, 0.95);
+			color: var(--text-primary);
+			font-family: var(--font-mono);
+			font-size: 10px;
+			padding: 8px;
+			border-radius: var(--border-radius-md);
+			overflow-y: auto;
+			white-space: pre-wrap;
+			word-wrap: break-word;
+			line-height: 1.4;
+		}
+
+		/* Spinner */
+		.spinner {
+			width: 12px;
+			height: 12px;
+			border: 2px solid rgba(255, 255, 255, 0.2);
+			border-top-color: currentColor;
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+			display: none;
+		}
+
+		.btn.loading .spinner,
+		.btn-circle.loading .spinner {
+			display: inline-block;
+		}
+
+		.btn.loading .btn-text,
+		.btn-circle.loading .btn-text {
+			display: none;
+		}
+
+		@keyframes spin {
+			to { transform: rotate(360deg); }
 		}
 	</style>
 </head>
 <body>
-	<div class="header">
-		<div class="logo-container">
-			<div class="logo-title">OneScript</div>
-			<div style="display: flex; gap: 8px; align-items: center;">
-				<button class="tool-icon-btn" id="toolbar-undo" title="Undo"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></button>
-				<button class="tool-icon-btn" id="toolbar-redo" title="Redo"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
-				<span class="badge">PDK v3</span>
+	<div class="app-container">
+		<!-- LEFT-HAND SIDEBAR ACTIVITY BAR -->
+		<div class="sidebar-activity">
+			<div class="activity-top">
+				<div class="sidebar-logo" title="OneScript AI Assistant">
+					<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+				</div>
+				<button class="activity-btn active" id="tab-prompt" title="AI Chat & Assistant">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+				</button>
+				<button class="activity-btn" id="tab-structure" title="Interactive Outline Map">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+				</button>
+				<button class="activity-btn" id="tab-console" title="Dev Console & Telemetry">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+				</button>
+			</div>
+			<div class="activity-bottom">
+				<button class="activity-btn" id="tab-settings" title="Plugin Configuration">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+				</button>
 			</div>
 		</div>
-		<div class="tabs">
-			<button class="tab-btn active" id="tab-prompt">Prompt</button>
-			<button class="tab-btn" id="tab-structure">Structure</button>
-			<button class="tab-btn" id="tab-settings">Settings</button>
+
+		<!-- MAIN WORKSPACE CONTAINER -->
+		<div class="main-workspace">
+			<!-- DYNAMIC HEADER -->
+			<div class="main-header">
+				<div class="header-title" id="active-view-title">Chat Assistant</div>
+				<div class="header-actions">
+					<button class="header-icon-btn" id="toolbar-undo" title="Undo Last Document Action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></button>
+					<button class="header-icon-btn" id="toolbar-redo" title="Redo Last Document Action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
+					<span id="model-cost-badge" class="badge-cost">0.5x Cost</span>
+					<div class="status-badge">
+						<span class="status-pulse"></span>
+						<span>ONLINE</span>
+					</div>
+				</div>
+			</div>
+
+			<!-- WORKSPACE VIEWS PANES -->
+			<div class="content-container">
+				
+				<!-- 1. AI CHAT & ASSISTANT VIEW PANE -->
+				<div class="view-pane active" id="view-prompt">
+					<!-- Selection Context Toolbar (Injected Dynamically) -->
+					<div class="card" id="context-toolbar" style="display: none; padding: 10px; margin-bottom: 8px; flex-shrink: 0;">
+						<!-- Toolbar HTML injected via plugin.js -->
+					</div>
+
+					<!-- Chat Logs / Messages Canvas -->
+					<div id="chat-history" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; margin-bottom: 8px;">
+						<div class="chat-welcome">
+							<div class="welcome-icon">
+								<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+							</div>
+							<div style="font-weight: 700; font-size: 13px; margin-bottom: 4px; color: var(--text-primary);">OneScript AI</div>
+							<div style="margin-bottom: 12px; font-size: 11px; line-height: 1.45; color: var(--text-secondary); max-width: 250px;">Direct AI copilot for ONLYOFFICE. Highlight text to edit, format, translate, or write outline commands.</div>
+							<div class="suggestion-container">
+								<span class="chip chip-special" id="chip-summarize">Summarize Selection</span>
+								<span class="chip" data-prompt="Format document: Georgia font, size 12pt, line-spacing 1.5, headers Crimson (#dc2626).">Modern Styling</span>
+								<span class="chip" data-prompt="Insert an action item bulleted list: 'Schedule sync', 'Review logs', 'Run validation'.">Action Bullets</span>
+								<span class="chip" data-prompt="Rewrite paragraph #2 to be much more professional, technical and concise.">Polished Text</span>
+							</div>
+						</div>
+					</div>
+
+					<!-- Slash Autocomplete Popup Menu -->
+					<div class="slash-menu" id="slash-menu" style="display: none;">
+						<div class="slash-item" data-cmd="/summarize">
+							<span class="slash-cmd">/summarize</span>
+							<span class="slash-desc">Create clear executive summary bullets</span>
+						</div>
+						<div class="slash-item" data-cmd="/format">
+							<span class="slash-cmd">/format</span>
+							<span class="slash-desc">Apply elegant fonts, colors, line spacing</span>
+						</div>
+						<div class="slash-item" data-cmd="/translate">
+							<span class="slash-cmd">/translate</span>
+							<span class="slash-desc">Translate selected paragraph to Spanish</span>
+						</div>
+						<div class="slash-item" data-cmd="/prune">
+							<span class="slash-cmd">/prune</span>
+							<span class="slash-desc">Remove empty paragraphs or table elements</span>
+						</div>
+						<div class="slash-item" data-cmd="/create">
+							<span class="slash-cmd">/create</span>
+							<span class="slash-desc">Write an essay/report layout template</span>
+						</div>
+					</div>
+
+					<!-- Capsule Prompt input capsule -->
+					<div class="input-card" id="chat-input-bar">
+						<span class="prompt-scope-badge" id="prompt-scope-badge">Entire Doc</span>
+						<textarea id="prompt-input" placeholder="Message OneScript... (Type '/' for commands)"></textarea>
+						<div style="display: flex; gap: 4px; align-items: center;">
+							<button class="btn-circle" id="execute-btn" title="Send Message">
+								<div class="spinner"></div>
+								<span class="btn-text" style="display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></span>
+							</button>
+							<button class="btn-circle btn-circle-danger" id="undo-ai-btn" title="Undo AI Action" style="display: none;">
+								<span style="display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></span>
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- 2. DOCUMENT STRUCTURE OUTLINE VIEW PANE -->
+				<div class="view-pane" id="view-structure">
+					<div class="view-header">
+						<div class="view-header-title">Document Outline</div>
+						<div class="view-header-actions">
+							<button class="header-action-btn active" id="toggle-view-outline">Tree</button>
+							<button class="header-action-btn" id="toggle-view-json">JSON</button>
+							<button class="header-action-btn" id="refresh-structure" title="Force Document Scan"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
+							<button class="header-action-btn" id="copy-structure" style="display: none;">Copy</button>
+						</div>
+					</div>
+					<div class="outline-wrapper">
+						<!-- Custom interactive Document Map Outline Tree -->
+						<div id="outline-tree-container" class="outline-tree">
+							<div class="outline-loading">Scanning document hierarchy...</div>
+						</div>
+						<!-- Raw fallback JSON view -->
+						<textarea id="structure-json" class="raw-json-viewer" style="display: none;" readonly placeholder="Loading document structure..."></textarea>
+					</div>
+				</div>
+
+				<!-- 3. UNIFIED DEV CONSOLE VIEW PANE -->
+				<div class="view-pane" id="view-console">
+					<div class="console-wrapper">
+						<div class="console-tabs">
+							<button class="console-tab-btn active" id="btn-tab-logs">Console Logs</button>
+							<button class="console-tab-btn" id="btn-tab-telemetry">AI Telemetry</button>
+						</div>
+						<div class="console-panes">
+							<!-- Logs terminal -->
+							<div class="console-pane active" id="pane-logs">
+								<div class="view-header" style="margin-bottom: 6px;">
+									<span class="view-header-title" style="font-size: 9px;">Core Console Output</span>
+									<div style="display: flex; gap: 4px;">
+										<button class="header-action-btn" id="clear-logs" title="Export logs file">Export</button>
+										<button class="header-action-btn" id="copy-log-file-btn" title="Copy log to clipboard">Copy</button>
+										<button class="header-action-btn" id="reset-logs" title="Clear console log" style="border-color: var(--error); color: var(--error);">Clear</button>
+									</div>
+								</div>
+								<div class="console-log-container" id="log-container">
+									<div class="log-entry info">[System] Antigravity IDE Engine loaded. Ready.</div>
+								</div>
+							</div>
+							<!-- AI Telemetry debugger -->
+							<div class="console-pane" id="pane-telemetry">
+								<div class="view-header" style="margin-bottom: 6px;">
+									<span class="view-header-title" style="font-size: 9px;">AI Action Pipeline Telemetry</span>
+									<div style="display: flex; gap: 4px;">
+										<button class="header-action-btn" id="copy-debug-log">Copy</button>
+										<button class="header-action-btn" id="clear-debug-log" style="border-color: var(--error); color: var(--error);">Clear</button>
+									</div>
+								</div>
+								<pre class="telemetry-pre" id="debug-viewer-content">No execution telemetry logged yet. Run a prompt to capture steps.</pre>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- 4. SYSTEM SETTINGS VIEW PANE -->
+				<div class="view-pane" id="view-settings" style="overflow-y: auto;">
+					<!-- Provider config card -->
+					<div class="card" id="panel-groq">
+						<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+							<div class="card-title" style="margin-bottom: 0;">Groq Configuration</div>
+							<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">▼</span>
+						</div>
+						<div class="card-body" style="display: block; margin-top: 8px;">
+							<div class="form-group">
+								<label for="api-key">Groq API Key</label>
+								<div class="input-container">
+									<input type="password" id="api-key" placeholder="Enter gsk_..." />
+									<span class="eye-icon" id="toggle-key-visibility" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 9.5px; font-weight: 700; color: var(--text-secondary); user-select: none;">SHOW</span>
+								</div>
+							</div>
+							<div class="btn-group" style="display: flex; gap: 6px; margin-top: 10px;">
+								<button class="btn btn-outline" id="save-key-btn" style="flex: 1;">Save Key</button>
+								<button class="btn btn-danger" id="remove-key-btn" style="flex: 1;">Remove</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Model selection card -->
+					<div class="card">
+						<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+							<div class="card-title" style="margin-bottom: 0;">Model Selector</div>
+							<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">▼</span>
+						</div>
+						<div class="card-body" style="display: block; margin-top: 8px;">
+							<div class="form-group">
+								<select id="model-select">
+									<option value="llama-3.3-70b-versatile">Llama 3.3 70B (Recommended)</option>
+									<option value="llama-3.1-8b-instant">Llama 3.1 8B (Fast)</option>
+									<option value="llama-3.2-3b-preview">Llama 3.2 3B (Lightweight)</option>
+									<option value="llama-3.2-1b-preview">Llama 3.2 1B (Ultra-fast)</option>
+									<option value="deepseek-r1-distill-qwen-32b">DeepSeek R1 32B (Reasoning)</option>
+									<option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B (Reasoning)</option>
+								</select>
+							</div>
+						</div>
+					</div>
+
+					<!-- Checkpoints card -->
+					<div class="card">
+						<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+							<div class="card-title" style="margin-bottom: 0;">Session Checkpoints</div>
+							<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">►</span>
+						</div>
+						<div class="card-body" style="display: none; margin-top: 8px;">
+							<div style="display: flex; gap: 8px; margin-bottom: 10px;">
+								<button class="btn btn-outline" id="save-checkpoint-btn" style="flex: 1;">Save Snapshot</button>
+							</div>
+							<div id="checkpoints-list" class="checkpoints-tree">
+								<div style="font-size: 11px; color: var(--text-secondary); text-align: center; padding: 8px;">No checkpoints saved.</div>
+							</div>
+						</div>
+					</div>
+
+				</div>
+
+			</div>
 		</div>
 	</div>
 
-	<div class="content-container">
-		<!-- PROMPT VIEW PANE -->
-		<div class="view-pane active" id="view-prompt">
-			<!-- Dynamic Context Toolbar -->
-			<div class="card" id="context-toolbar" style="display: none; padding: 12px; margin-bottom: 8px; flex-shrink: 0;">
-				<!-- Injected dynamically based on selection type -->
-			</div>
-
-			<!-- Conversational Message History Container -->
-			<div id="chat-history" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px; margin-bottom: 8px;">
-				<div class="chat-welcome">
-					<div class="welcome-icon">
-						<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-					</div>
-					<div style="font-weight: 700; font-size: 13.5px; margin-bottom: 6px; color: var(--text-primary);">OneScript AI</div>
-					<div style="margin-bottom: 14px; font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); max-width: 280px;">Ask me to edit, rewrite, translate, format, or restructure this document.</div>
-					<div class="suggestion-container">
-						<span class="chip chip-special" id="chip-summarize">Summarize Range</span>
-						<span class="chip" data-prompt="Reformat the document: Set font to Georgia, headers color to Crimson (#dc2626), and line-spacing to 1.5.">Classic Layout</span>
-						<span class="chip" data-prompt="Insert a clean bulleted list after paragraph #1 with action items: 'Draft brief', 'Schedule sync', 'Execute validation'.">Add Actions</span>
-						<span class="chip" data-prompt="Completely delete paragraph #3 and rewrite paragraph #2 to be much more professional.">Prune & Refine</span>
-					</div>
-				</div>
-			</div>
-
-			<!-- Chat Input Bar -->
-			<div class="input-card" id="chat-input-bar" style="margin-bottom: 8px;">
-				<textarea id="prompt-input" placeholder="Message OneScript..."></textarea>
-				<div style="display: flex; gap: 6px; align-items: center;">
-					<button class="btn-circle" id="execute-btn" title="Send Message">
-						<div class="spinner"></div>
-						<span class="btn-text" style="display: flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></span>
-					</button>
-					<button class="btn-circle btn-circle-danger" id="undo-ai-btn" title="Undo AI Action" style="display: none;">
-						<span style="display: flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></span>
-					</button>
-				</div>
-			</div>
-
-			<!-- Input panel footer wrapper -->
-			<div style="margin-top: auto; flex-shrink: 0;"></div>
-		</div>
-
-		<!-- STRUCTURE VIEW PANE -->
-		<div class="view-pane" id="view-structure">
-			<div class="card" style="display: flex; flex-direction: column; flex: 1; min-height: 380px;">
-				<div class="log-header" style="margin-bottom: 8px;">
-					<div class="card-title" style="margin-bottom: 0;">Document JSON Structure</div>
-					<div style="display: flex; gap: 8px;">
-						<span class="toggle-settings" id="copy-structure" style="font-size: 10px; cursor: pointer; opacity: 0.8; user-select: none;">Copy JSON</span>
-						<span class="toggle-settings" id="refresh-structure" style="font-size: 10px; cursor: pointer; opacity: 0.8; user-select: none;">Refresh</span>
-					</div>
-				</div>
-				<textarea id="structure-json" style="flex: 1; height: 320px; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; background: rgba(8, 12, 21, 0.9); color: #bfdbfe; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; resize: none; overflow-y: auto;" readonly placeholder="Loading document structure..."></textarea>
-			</div>
-		</div>
-
-		<!-- SETTINGS VIEW PANE -->
-		<div class="view-pane" id="view-settings">
-			<!-- Accordion 1: Groq Configuration -->
-			<div class="card" id="panel-groq">
-				<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-					<div class="card-title" style="margin-bottom: 0;">Groq Configuration</div>
-					<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">▼</span>
-				</div>
-				<div class="card-body" style="display: block; margin-top: 8px;">
-					<div class="form-group">
-						<label for="api-key">Groq API Key</label>
-						<div class="input-container">
-							<input type="password" id="api-key" placeholder="Enter gsk_..." />
-							<span class="eye-icon" id="toggle-key-visibility" style="font-size: 10px; font-weight: 600; text-transform: uppercase;">Show</span>
-						</div>
-					</div>
-					<div class="btn-group">
-						<button class="btn btn-outline" id="save-key-btn" style="flex: 1; padding: 10px; font-size: 11.5px;">Save Key</button>
-						<button class="btn btn-danger" id="remove-key-btn" style="flex: 1; padding: 10px; font-size: 11.5px;">Remove Key</button>
-					</div>
-				</div>
-			</div>
-
-			<!-- Accordion 2: Session Checkpoints -->
-			<div class="card">
-				<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-					<div class="card-title" style="margin-bottom: 0;">Session Checkpoints</div>
-					<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">►</span>
-				</div>
-				<div class="card-body" style="display: none; margin-top: 8px;">
-					<div style="display: flex; gap: 8px; margin-bottom: 12px;">
-						<button class="btn btn-outline" id="save-checkpoint-btn" style="padding: 10px; font-size: 11.5px; flex: 1;">Save Checkpoint</button>
-					</div>
-					<div id="checkpoints-list" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
-						<div style="font-size: 11px; color: var(--text-secondary); text-align: center; padding: 8px;">No checkpoints saved yet.</div>
-					</div>
-				</div>
-			</div>
-
-			<!-- Accordion 3: Developer Log File -->
-			<div class="card">
-				<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-					<div class="card-title" style="margin-bottom: 0;">Developer Log File</div>
-					<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">►</span>
-				</div>
-				<div class="card-body" style="display: none; margin-top: 8px;">
-					<div style="display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
-						<button class="btn btn-outline" id="clear-logs" style="padding: 6px 8px; font-size: 11px; flex: 1; min-width: 80px;">Download</button>
-						<button class="btn btn-outline" id="copy-log-file-btn" style="padding: 6px 8px; font-size: 11px; flex: 1; min-width: 80px;">Copy Log</button>
-						<button class="btn btn-danger" id="reset-logs" style="padding: 6px 8px; font-size: 11px; flex: 1; min-width: 80px;">Clear</button>
-					</div>
-					<div style="margin-top: 10px; border: 1px solid var(--border-color); border-radius: var(--border-radius-boxy); background: rgba(0,0,0,0.08); padding: 6px 8px;">
-						<div class="log-container" id="log-container" style="max-height: 120px; overflow-y: auto;">
-							<div class="log-entry info" style="font-family: var(--font-mono); font-size: 10px;">[System] Core engine loaded. Ready.</div>
-						</div>
-					</div>
-					<div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 8px;">Log entries are persisted in browser storage and available for export.</div>
-				</div>
-			</div>
-
-			<!-- Accordion 4: AI Pipeline Execution Debugger -->
-			<div class="card" style="border: 1px solid rgba(122, 162, 247, 0.35);">
-				<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-					<div class="card-title" style="color: var(--primary); margin-bottom: 0; display: flex; align-items: center; gap: 6px;">AI Pipeline Execution Debugger</div>
-					<div style="display: flex; gap: 8px; align-items: center;">
-						<span id="copy-debug-log" style="font-size: 10px; cursor: pointer; user-select: none; color: var(--primary); font-weight: bold; background: rgba(122, 162, 247, 0.15); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(122, 162, 247, 0.35);">Copy Log</span>
-						<span id="clear-debug-log" style="font-size: 10px; cursor: pointer; user-select: none; color: #f7768e; font-weight: bold; background: rgba(247, 118, 142, 0.15); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(247, 118, 142, 0.35);">Clear</span>
-						<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">►</span>
-					</div>
-				</div>
-				<div class="card-body" style="display: none; margin-top: 8px;">
-					<div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.4;">
-						Real-time unified debugger showing the complete data flow (prompts, before/after states, and logical action plans) for the last execution.
-					</div>
-					<div style="margin-top: 10px; background: rgba(8, 12, 21, 0.85); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; font-family: var(--font-mono); font-size: 11px; height: 350px; overflow-y: auto;">
-						<pre id="debug-viewer-content" style="white-space: pre-wrap; word-wrap: break-word; color: var(--text-primary); margin: 0; line-height: 1.4;">No execution data captured yet. Execute an AI command to see step-by-step telemetry logs here.</pre>
-					</div>
-				</div>
-			</div>
-
-			<!-- Accordion 5: Model Tuning -->
-			<div class="card">
-				<div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-					<div class="card-title" style="margin-bottom: 0;">Model Tuning</div>
-					<span class="accordion-chevron" style="font-size: 8px; color: var(--text-secondary);">►</span>
-				</div>
-				<div class="card-body" style="display: none; margin-top: 8px;">
-					<div class="form-group">
-						<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-							<label for="model-select" style="margin-bottom: 0;">Active Model</label>
-							<span id="model-cost-badge" class="badge" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: bold; background: var(--bg-card); border: 1px solid var(--border); color: var(--text);">0.5x Cost</span>
-						</div>
-						<select id="model-select" style="margin-top: 8px;">
-							<option value="llama-3.3-70b-versatile">Llama 3.3 70B (Recommended)</option>
-							<option value="llama-3.1-8b-instant">Llama 3.1 8B (Fast)</option>
-							<option value="llama-3.2-3b-preview">Llama 3.2 3B (Lightweight)</option>
-							<option value="llama-3.2-1b-preview">Llama 3.2 1B (Ultra-fast)</option>
-							<option value="deepseek-r1-distill-qwen-32b">DeepSeek R1 32B (Reasoning)</option>
-							<option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B (Reasoning)</option>
-						</select>
-					</div>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<!-- Scripts -->
+	<!-- System libraries -->
 	<script type="text/javascript" src="./../v1/plugins.js"></script>
 	<script type="text/javascript" src="./../v1/plugins-ui.js"></script>
-	<script src="plugin.js?v=1784011033"></script>
+	<script src="plugin.js?v=1784089287"></script>
 </body>
 </html>

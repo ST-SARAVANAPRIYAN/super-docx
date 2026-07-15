@@ -3,10 +3,12 @@
 	// Cache UI selectors
 	const tabPrompt = document.getElementById('tab-prompt');
 	const tabStructure = document.getElementById('tab-structure');
+	const tabConsole = document.getElementById('tab-console');
 	const tabSettings = document.getElementById('tab-settings');
 	
 	const viewPrompt = document.getElementById('view-prompt');
 	const viewStructure = document.getElementById('view-structure');
+	const viewConsole = document.getElementById('view-console');
 	const viewSettings = document.getElementById('view-settings');
 	
 	const structureJson = document.getElementById('structure-json');
@@ -17,8 +19,6 @@
 	const toggleKeyVisibility = document.getElementById('toggle-key-visibility');
 	const saveKeyBtn = document.getElementById('save-key-btn');
 	const removeKeyBtn = document.getElementById('remove-key-btn');
-
-
 
 	const modelSelect = document.getElementById('model-select');
 	const modelCostBadge = document.getElementById('model-cost-badge');
@@ -42,8 +42,6 @@
 	const logStorageKey = "onescript_log_file";
 	let logLines = [];
 
-	// Scan Range is determined dynamically
-
 	// Summarization elements
 	const chipSummarize = document.getElementById('chip-summarize');
 	let activeSummaryContent = '';
@@ -51,6 +49,22 @@
 	// Session Checkpoints elements
 	const saveCheckpointBtn = document.getElementById('save-checkpoint-btn');
 	const checkpointsList = document.getElementById('checkpoints-list');
+
+	// New Redesigned UI Selectors
+	const toggleViewOutline = document.getElementById('toggle-view-outline');
+	const toggleViewJson = document.getElementById('toggle-view-json');
+	const outlineTreeContainer = document.getElementById('outline-tree-container');
+
+	const btnTabLogs = document.getElementById('btn-tab-logs');
+	const btnTabTelemetry = document.getElementById('btn-tab-telemetry');
+	const paneLogs = document.getElementById('pane-logs');
+	const paneTelemetry = document.getElementById('pane-telemetry');
+
+	const slashMenu = document.getElementById('slash-menu');
+	const promptScopeBadge = document.getElementById('prompt-scope-badge');
+
+	let activeAiMessageBody = null;
+	let currentAgentSteps = null;
 
 	let cachedDocData = null;
 	let proposedChanges = null;
@@ -1231,34 +1245,97 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 	};
 
 	// View Tabs Navigation
-	tabPrompt.addEventListener('click', () => {
-		tabPrompt.classList.add('active');
-		tabStructure.classList.remove('active');
-		tabSettings.classList.remove('active');
-		viewPrompt.classList.add('active');
-		viewStructure.classList.remove('active');
-		viewSettings.classList.remove('active');
-	});
+	function switchTab(activeTab, activeView, titleText) {
+		[tabPrompt, tabStructure, tabConsole, tabSettings].forEach(tab => {
+			if (tab) tab.classList.toggle('active', tab === activeTab);
+		});
+		[viewPrompt, viewStructure, viewConsole, viewSettings].forEach(view => {
+			if (view) view.classList.toggle('active', view === activeView);
+		});
+		const activeViewTitle = document.getElementById('active-view-title');
+		if (activeViewTitle) {
+			activeViewTitle.innerText = titleText;
+		}
+	}
 
+	tabPrompt.addEventListener('click', () => switchTab(tabPrompt, viewPrompt, 'Chat Assistant'));
 	tabStructure.addEventListener('click', () => {
-		tabStructure.classList.add('active');
-		tabPrompt.classList.remove('active');
-		tabSettings.classList.remove('active');
-		viewStructure.classList.add('active');
-		viewPrompt.classList.remove('active');
-		viewSettings.classList.remove('active');
+		switchTab(tabStructure, viewStructure, 'Document Outline');
 		refreshDocStructureView();
 	});
-
+	tabConsole.addEventListener('click', () => switchTab(tabConsole, viewConsole, 'Dev Console'));
 	tabSettings.addEventListener('click', () => {
-		tabSettings.classList.add('active');
-		tabPrompt.classList.remove('active');
-		tabStructure.classList.remove('active');
-		viewSettings.classList.add('active');
-		viewPrompt.classList.remove('active');
-		viewStructure.classList.remove('active');
+		switchTab(tabSettings, viewSettings, 'Settings');
 		renderCheckpointsUI();
 	});
+
+	// Dev Console inner tabs
+	if (btnTabLogs && btnTabTelemetry) {
+		btnTabLogs.addEventListener('click', () => {
+			btnTabLogs.classList.add('active');
+			btnTabTelemetry.classList.remove('active');
+			paneLogs.classList.add('active');
+			paneTelemetry.classList.remove('active');
+		});
+		btnTabTelemetry.addEventListener('click', () => {
+			btnTabTelemetry.classList.add('active');
+			btnTabLogs.classList.remove('active');
+			paneTelemetry.classList.add('active');
+			paneLogs.classList.remove('active');
+		});
+	}
+
+	// Slash Command Popup Autocomplete Menu
+	if (promptInput && slashMenu) {
+		promptInput.addEventListener('input', (e) => {
+			const val = e.target.value;
+			if (val === '/') {
+				slashMenu.style.display = 'block';
+				// select first item
+				const items = slashMenu.querySelectorAll('.slash-item');
+				items.forEach((item, idx) => {
+					item.classList.toggle('selected', idx === 0);
+				});
+			} else if (!val.startsWith('/')) {
+				slashMenu.style.display = 'none';
+			}
+		});
+
+		document.addEventListener('click', (e) => {
+			if (!e.target.closest('#chat-input-bar') && !e.target.closest('#slash-menu')) {
+				slashMenu.style.display = 'none';
+			}
+		});
+
+		slashMenu.querySelectorAll('.slash-item').forEach(item => {
+			item.addEventListener('click', () => {
+				const cmd = item.getAttribute('data-cmd');
+				promptInput.value = cmd + ' ';
+				slashMenu.style.display = 'none';
+				promptInput.focus();
+			});
+		});
+	}
+
+	// Update Selection Context Scope Badge
+	function updateScopeBadge() {
+		window.Asc.plugin.callCommand(function() {
+			var oRange = Api.GetDocument().GetRangeBySelect();
+			if (oRange) {
+				var rText = oRange.GetText() || "";
+				return rText.replace(/[\r\n\s\t]+/g, "").length > 0;
+			}
+			return false;
+		}, false, true, function(hasSelection) {
+			const badge = document.getElementById('prompt-scope-badge');
+			if (badge) {
+				badge.innerText = hasSelection ? 'Selection' : 'Entire Doc';
+				badge.style.borderColor = hasSelection ? 'rgba(16, 185, 129, 0.4)' : 'rgba(122, 162, 247, 0.3)';
+				badge.style.color = hasSelection ? 'var(--accent-green)' : 'var(--primary)';
+				badge.style.background = hasSelection ? 'rgba(16, 185, 129, 0.08)' : 'var(--primary-glow)';
+			}
+		});
+	}
 
 	// Scan range is now dynamic and automatic
 
@@ -1474,20 +1551,178 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 	}
 
+	// Render Interactive Outline Tree Map
+	function renderOutlineTree(parsed, container) {
+		container.innerHTML = '';
+		if (!parsed || !parsed.sections || parsed.sections.length === 0) {
+			container.innerHTML = '<div class="outline-empty">No outline elements found.</div>';
+			return;
+		}
+
+		// Create metadata header/indicator
+		const metaHeader = document.createElement('div');
+		metaHeader.className = 'outline-meta-header';
+		metaHeader.innerHTML = `
+			<span class="meta-mode">${parsed.mode === 'selection' ? 'Selection' : 'Entire Document'}</span>
+			<span class="meta-count">${parsed.metadata.totalElements} elements</span>
+		`;
+		container.appendChild(metaHeader);
+
+		parsed.sections.forEach((section, sIdx) => {
+			// Create Section Node
+			const sectionNode = document.createElement('div');
+			sectionNode.className = 'outline-section-node';
+			
+			const sectionTitle = document.createElement('div');
+			sectionTitle.className = 'outline-section-title';
+			sectionTitle.innerHTML = `
+				<span class="section-caret">▼</span>
+				<span class="section-icon">📂</span>
+				<span class="section-label" title="${section.title}">${section.title}</span>
+			`;
+			sectionNode.appendChild(sectionTitle);
+			
+			const sectionElements = document.createElement('div');
+			sectionElements.className = 'outline-section-elements';
+			
+			if (section.elements && section.elements.length > 0) {
+				section.elements.forEach(el => {
+					const elNode = document.createElement('div');
+					elNode.className = `outline-el-node type-${el.type}`;
+					if (parsed.metadata.cursorIndex === el.index) {
+						elNode.classList.add('caret-focus');
+					}
+					
+					let icon = '📝';
+					let displayText = el.text ? el.text.trim() : '';
+					let detailBadge = '';
+					
+					if (el.type === 'table') {
+						icon = '🗂️';
+						const rows = el.rows ? el.rows.length : 0;
+						const cols = el.rows && el.rows[0] && el.rows[0].cells ? el.rows[0].cells.length : 0;
+						displayText = `Table (${rows}x${cols})`;
+						detailBadge = `<span class="el-badge table">TABLE</span>`;
+					} else if (el.type === 'paragraph') {
+						if (el.style) {
+							if (el.style.styleName) {
+								const isHeading = el.style.styleName.toLowerCase().includes('heading');
+								if (isHeading) {
+									icon = '🏷️';
+									elNode.classList.add('heading-node');
+									detailBadge = `<span class="el-badge heading">${el.style.styleName.replace(/heading/i, 'H')}</span>`;
+								} else if (el.style.listType) {
+									icon = el.style.listType === 'numbered' ? '🔢' : '•';
+									detailBadge = `<span class="el-badge list">LIST</span>`;
+								}
+							}
+						}
+						if (!displayText) {
+							displayText = '[Empty Paragraph]';
+							elNode.classList.add('empty-node');
+						}
+					}
+					
+					// Style overrides
+					let styleAttr = '';
+					if (el.style) {
+						if (el.style.bold) styleAttr += 'font-weight: bold;';
+						if (el.style.italic) styleAttr += 'font-style: italic;';
+						if (el.style.underline) styleAttr += 'text-decoration: underline;';
+						if (el.style.color && el.style.color !== '#000000') styleAttr += `color: ${el.style.color};`;
+					}
+					
+					elNode.innerHTML = `
+						<span class="el-icon">${icon}</span>
+						<span class="el-text" style="${styleAttr}" title="${el.text || ''}">${displayText.substring(0, 45)}${displayText.length > 45 ? '...' : ''}</span>
+						<div class="el-meta">
+							${detailBadge}
+							<span class="el-index">#${el.index + 1}</span>
+						</div>
+					`;
+					
+					// Click handler to select paragraph in ONLYOFFICE!
+					elNode.addEventListener('click', () => {
+						// Remove active focus class from others
+						container.querySelectorAll('.outline-el-node').forEach(node => node.classList.remove('active-focus'));
+						elNode.classList.add('active-focus');
+						
+						log(`Selecting Document Element #${el.index + 1} in editor...`, 'info');
+						window.Asc.scope.targetSelectIndex = el.index;
+						window.Asc.plugin.callCommand(function() {
+							var oDocument = Api.GetDocument();
+							var oElement = oDocument.GetElement(Asc.scope.targetSelectIndex);
+							if (oElement) {
+								try {
+									oElement.Select();
+								} catch(err) {
+									return "err: " + err.message;
+								}
+								return "success";
+							}
+							return "notfound";
+						}, false, true, function(res) {
+							if (res && res.indexOf("err") !== -1) {
+								log("Error selecting element: " + res, "error");
+							} else if (res === "notfound") {
+								log("Element not found in document.", "warning");
+							} else {
+								log(`Element #${el.index + 1} selected.`, "success");
+							}
+						});
+					});
+					
+					sectionElements.appendChild(elNode);
+				});
+			} else {
+				sectionElements.innerHTML = '<div class="outline-empty-section">No elements in section</div>';
+			}
+			
+			sectionNode.appendChild(sectionElements);
+			
+			// Toggle section collapse/expand
+			sectionTitle.addEventListener('click', () => {
+				const isCollapsed = sectionElements.style.display === 'none';
+				sectionElements.style.display = isCollapsed ? 'flex' : 'none';
+				sectionTitle.querySelector('.section-caret').innerText = isCollapsed ? '▼' : '►';
+			});
+			
+			container.appendChild(sectionNode);
+		});
+	}
+
 	// Dynamic Document JSON Viewer compiler (debounced and fully dynamic)
 	let isScanning = false;
 	let isEditingAutonomously = false;
 	async function refreshDocStructureView() {
 		if (isScanning || isEditingAutonomously) return;
 		isScanning = true;
+		if (outlineTreeContainer) outlineTreeContainer.innerHTML = '<div class="outline-loading">Scanning document...</div>';
 		structureJson.value = "Scanning active document structure JSON...";
 		try {
 			const docJSON = await serializeActiveContent();
 			const parsed = JSON.parse(docJSON);
 			structureJson.value = JSON.stringify(parsed, null, 2);
+
+			// Render Outline Tree Map
+			if (outlineTreeContainer) {
+				renderOutlineTree(parsed, outlineTreeContainer);
+			}
+
+			// Update the context scope badge
+			const badge = document.getElementById('prompt-scope-badge');
+			if (badge) {
+				const hasSelection = parsed.mode === 'selection';
+				badge.innerText = hasSelection ? 'Selection' : 'Entire Doc';
+				badge.style.borderColor = hasSelection ? 'rgba(16, 185, 129, 0.4)' : 'rgba(122, 162, 247, 0.3)';
+				badge.style.color = hasSelection ? 'var(--accent-green)' : 'var(--primary)';
+				badge.style.background = hasSelection ? 'rgba(16, 185, 129, 0.08)' : 'var(--primary-glow)';
+			}
+
 			log(`Compiled structural JSON successfully [Mode: ${parsed.mode}].`, "success");
 		} catch(err) {
 			structureJson.value = "Error scanning document structure: " + err.message;
+			if (outlineTreeContainer) outlineTreeContainer.innerHTML = `<div class="outline-error">Error scanning structure: ${err.message}</div>`;
 			log("Error loading structure: " + err.message, "error");
 		} finally {
 			isScanning = false;
@@ -1515,6 +1750,25 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 	refreshStructure.addEventListener('click', () => {
 		refreshDocStructureView();
 	});
+
+	// Toggle view modes (Tree / JSON) in Outline
+	if (toggleViewOutline && toggleViewJson && outlineTreeContainer && structureJson) {
+		toggleViewOutline.addEventListener('click', () => {
+			toggleViewOutline.classList.add('active');
+			toggleViewJson.classList.remove('active');
+			outlineTreeContainer.style.display = 'block';
+			structureJson.style.display = 'none';
+			copyStructure.style.display = 'none';
+		});
+		
+		toggleViewJson.addEventListener('click', () => {
+			toggleViewJson.classList.add('active');
+			toggleViewOutline.classList.remove('active');
+			outlineTreeContainer.style.display = 'none';
+			structureJson.style.display = 'block';
+			copyStructure.style.display = 'inline-block';
+		});
+	}
 
 	// Session Checkpoint Snapshots
 	saveCheckpointBtn.addEventListener('click', () => {
@@ -1647,6 +1901,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			this.attachEvent("onSelectionChanged", function() {
 				debouncedRefresh();
 				updateDynamicToolbar();
+				updateScopeBadge();
 			});
 		} catch(e) {}
 
@@ -1654,22 +1909,26 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			this.attachEvent("onTargetPositionChanged", function() {
 				debouncedRefresh();
 				updateDynamicToolbar();
+				updateScopeBadge();
 			});
 		} catch(e) {}
 		
 		// Initial scan and toolbar load
 		refreshDocStructureView();
 		updateDynamicToolbar();
+		updateScopeBadge();
 	};
 
 	// Fallback direct event assignments on the plugin object
 	window.Asc.plugin.event_onSelectionChanged = function() {
 		debouncedRefresh();
 		updateDynamicToolbar();
+		updateScopeBadge();
 	};
 	window.Asc.plugin.event_onTargetPositionChanged = function() {
 		debouncedRefresh();
 		updateDynamicToolbar();
+		updateScopeBadge();
 	};
 
 	// Bind Undo / Redo toolbar events
@@ -1730,6 +1989,53 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 	});
 
+	// Real-Time Stepper Progress Component Helpers
+	function updateAgentStepper(aiMessageBody, steps) {
+		aiMessageBody.innerHTML = '';
+		const stepperDiv = document.createElement('div');
+		stepperDiv.className = 'agent-stepper';
+		
+		steps.forEach((step, idx) => {
+			const stepItem = document.createElement('div');
+			stepItem.className = `stepper-item ${step.status}`;
+			
+			let statusIcon = '';
+			if (step.status === 'done') {
+				statusIcon = '✓';
+			} else if (step.status === 'running') {
+				statusIcon = '<div class="stepper-spinner"></div>';
+			} else if (step.status === 'failed') {
+				statusIcon = '✗';
+			} else {
+				statusIcon = idx + 1;
+			}
+			
+			stepItem.innerHTML = `
+				<div class="stepper-icon-wrap">
+					<div class="stepper-icon">${statusIcon}</div>
+				</div>
+				<div class="stepper-content">
+					<div class="stepper-title">${step.label}</div>
+					${step.details ? `<div class="stepper-details">${step.details}</div>` : ''}
+				</div>
+			`;
+			stepperDiv.appendChild(stepItem);
+		});
+		
+		aiMessageBody.appendChild(stepperDiv);
+	}
+
+	function setStepperStep(idx, status, details) {
+		if (!currentAgentSteps || !currentAgentSteps[idx]) return;
+		currentAgentSteps[idx].status = status;
+		if (details !== undefined) {
+			currentAgentSteps[idx].details = details;
+		}
+		if (activeAiMessageBody) {
+			updateAgentStepper(activeAiMessageBody, currentAgentSteps);
+		}
+	}
+
 	// Click run button (Refactored Intent-routed Context-aware Pipeline)
 	executeBtn.addEventListener('click', async () => {
 		const hasToken = localStorage.getItem('groq_copilot_key');
@@ -1751,7 +2057,16 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 		// Append AI placeholder
 		const aiMessage = appendChatMessage('ai', 'Initializing...', 'text');
-		const aiMessageBody = aiMessage.querySelector('.message-body');
+		activeAiMessageBody = aiMessage.querySelector('.message-body');
+
+		// Initialize Stepper
+		currentAgentSteps = [
+			{ label: "Classifying Request Intent", status: "running", details: "Contacting Router AI..." },
+			{ label: "Extracting Document Context", status: "pending", details: "" },
+			{ label: "Building Modification Plan", status: "pending", details: "" },
+			{ label: "Applying Edits Live", status: "pending", details: "" }
+		];
+		updateAgentStepper(activeAiMessageBody, currentAgentSteps);
 
 		// Initialize Telemetry Log
 		lastExecutionDebugData = {
@@ -1773,13 +2088,14 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 		try {
 			// LAYER 1: Intent Router
-			aiMessageBody.innerText = 'Routing request...';
 			const intent = await routeIntent(prompt);
 			lastExecutionDebugData.intent = intent;
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
+			setStepperStep(0, "done", `Classified as [${intent.toUpperCase()}]`);
+			setStepperStep(1, "running", "Compiling document ranges...");
+
 			// LAYER 2: Context Builder Serialization mode determination
-			aiMessageBody.innerText = 'Serializing document context...';
 			let serializationMode = "minimal";
 			if (intent === INTENTS.FORMAT || intent === INTENTS.INSERT_CONTENT || intent === INTENTS.DELETE_CONTENT) {
 				serializationMode = "medium";
@@ -1802,17 +2118,20 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 			if (totalElements === 0 && intent !== INTENTS.CREATE_DOCUMENT) {
 				log('Error: Selection range or document is empty.', 'error');
-				aiMessageBody.innerText = 'Error: Selection range or document is empty.';
+				setStepperStep(1, "failed", "Empty selection range");
+				activeAiMessageBody.innerText = 'Error: Selection range or document is empty.';
 				lastExecutionDebugData.status = "Failed: Selection range or document is empty.";
 				if (typeof updateDebugViewer === 'function') updateDebugViewer();
 				setLoading(false);
 				return;
 			}
 
+			setStepperStep(1, "done", `Compacted ${totalElements} elements`);
+			
 			const activeModel = localStorage.getItem('groq_copilot_model') || 'llama-3.3-70b-versatile';
+			setStepperStep(2, "running", `Querying planner on model [${activeModel}]...`);
 
 			log(`Contacting Groq API using model: ${activeModel}...`, 'info');
-			aiMessageBody.innerText = 'Querying Planner AI...';
 			lastExecutionDebugData.status = "Running (Querying LLM)...";
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			
@@ -1828,20 +2147,31 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			
 			if (!proposedChanges || proposedChanges.length === 0) {
 				log('Analysis complete: No logical changes suggested for this request.', 'warning');
-				aiMessageBody.innerText = 'No edits needed for this request.';
+				setStepperStep(2, "done", "No edits needed");
+				setStepperStep(3, "done", "Finished");
+				activeAiMessageBody.innerText = 'No edits needed for this request.';
 				lastExecutionDebugData.status = "No changes suggested.";
 			} else {
 				log(`Successfully decoded ${proposedChanges.length} logical action steps.`, 'success');
+				setStepperStep(2, "done", `Generated ${proposedChanges.length} actions`);
+				setStepperStep(3, "running", "Executing edits sequentially...");
 				lastExecutionDebugData.status = "Executing plan live on document...";
 				isEditingAutonomously = true;
 				log('Executing autonomous editing workflow immediately on document...', 'info');
-				executeSequentialEdits(proposedChanges, aiMessageBody);
+				executeSequentialEdits(proposedChanges, activeAiMessageBody);
 			}
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
 		} catch (err) {
 			log(`Execution Error: ${err.message}`, 'error');
-			aiMessageBody.innerText = `Error: ${err.message}`;
+			// Mark running step as failed
+			const runningIdx = currentAgentSteps ? currentAgentSteps.findIndex(s => s.status === 'running') : -1;
+			if (runningIdx !== -1) {
+				setStepperStep(runningIdx, "failed", err.message);
+			}
+			if (activeAiMessageBody) {
+				activeAiMessageBody.innerHTML += `<div style="color: var(--error); margin-top: 8px;">Error: ${err.message}</div>`;
+			}
 			lastExecutionDebugData.status = "Failed: " + err.message;
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
 			console.error(err);
@@ -3284,6 +3614,7 @@ User Request:
 		async function applyNext() {
 			if (i >= changes.length) {
 				log('All autonomous AI edits applied live, verified, and completed!', 'success');
+				setStepperStep(3, "done", `Applied ${changes.length} edits successfully`);
 				proposedChanges = null;
 				executeBtn.disabled = false;
 				isEditingAutonomously = false;
@@ -3311,10 +3642,7 @@ User Request:
 
 			log(`Applying action [${actionName.toUpperCase()}] to element #${targetIndex + 1} (actual index #${actualTargetIndex + 1}). Attempt ${retryCount + 1}/${maxRetries}...`, 'info');
 
-			aiMessageBody.innerHTML = `
-				<div style="color: var(--info); font-weight: 600; margin-bottom: 4px;">⚡ Applying edits...</div>
-				<div style="font-size: 9.5px; color: var(--text-secondary);">Applying ${actionName} on element #${targetIndex + 1} (${i + 1} of ${changes.length})</div>
-			`;
+			setStepperStep(3, "running", `Applying ${actionName} on element #${targetIndex + 1} (${i + 1}/${changes.length})`);
 
 			// Capture element state before applying change
 			const beforeState = await captureElementState(actualTargetIndex);
