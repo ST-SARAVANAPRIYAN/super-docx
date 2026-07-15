@@ -130,22 +130,29 @@
 		wrapper.appendChild(title);
 		
 		const changesListDiv = document.createElement('div');
-		changesListDiv.style.maxHeight = '140px';
+		changesListDiv.style.maxHeight = '145px';
 		changesListDiv.style.overflowY = 'auto';
 		changesListDiv.style.display = 'flex';
 		changesListDiv.style.flexDirection = 'column';
-		changesListDiv.style.gap = '6px';
+		changesListDiv.style.gap = '8px';
+		changesListDiv.style.padding = '10px';
+		changesListDiv.style.background = 'var(--bg-base)';
+		changesListDiv.style.border = '1px solid var(--border-color)';
+		changesListDiv.style.borderRadius = '8px';
 		
 		changes.forEach((change) => {
 			const original = findElementByIndex(change.targetIndex);
 			if (!original && change.action !== 'createParagraph') return;
 			
 			const item = document.createElement('div');
-			item.style.padding = '6px';
-			item.style.background = 'var(--bg-base)';
-			item.style.border = '1px solid var(--border-color)';
-			item.style.borderRadius = '2px';
+			item.style.padding = '0 0 8px 0';
+			item.style.background = 'transparent';
+			item.style.border = 'none';
+			item.style.borderRadius = '0';
 			item.style.fontSize = '10px';
+			if (changes.indexOf(change) < changes.length - 1) {
+				item.style.borderBottom = '1px solid var(--border-color)';
+			}
 			
 			let actionBadge = '';
 			if (change.action === 'createParagraph') {
@@ -199,81 +206,89 @@
 		
 		wrapper.appendChild(changesListDiv);
 		
-		const btnGroup = document.createElement('div');
-		btnGroup.style.display = 'flex';
-		btnGroup.style.gap = '6px';
-		btnGroup.style.marginTop = '6px';
-		
-		const acceptBtn = document.createElement('button');
-		acceptBtn.className = 'btn';
-		acceptBtn.innerText = applied ? 'Accept (Keep)' : 'Accept & Apply';
-		acceptBtn.style.flex = '1.2';
-		acceptBtn.style.fontSize = '10px';
-		acceptBtn.style.padding = '6px';
-		acceptBtn.style.background = 'var(--success)';
-		
-		const discardBtn = document.createElement('button');
-		discardBtn.className = 'btn btn-outline btn-danger';
-		discardBtn.innerText = applied ? 'Discard (Undo)' : 'Discard';
-		discardBtn.style.flex = '0.8';
-		discardBtn.style.fontSize = '10px';
-		discardBtn.style.padding = '6px';
-		
-		btnGroup.appendChild(acceptBtn);
-		btnGroup.appendChild(discardBtn);
-		wrapper.appendChild(btnGroup);
-		
 		aiMessageBody.appendChild(wrapper);
 		
-		return new Promise((resolve) => {
-			acceptBtn.addEventListener('click', () => {
-				acceptBtn.disabled = true;
-				discardBtn.disabled = true;
-				if (applied) {
-					btnGroup.remove();
-					const msg = document.createElement('div');
-					msg.style.color = 'var(--success)';
-					msg.style.fontWeight = '600';
-					msg.style.fontSize = '10.5px';
-					msg.style.marginTop = '4px';
-					msg.innerText = '✓ Changes accepted.';
-					wrapper.appendChild(msg);
-					appliedChangesCount = 0;
-					undoAiBtn.style.display = 'none';
-					log('User accepted the AI document modifications.', 'success');
-				} else {
-					acceptBtn.innerText = 'Applying...';
-				}
-				resolve('accept');
-			});
+		if (applied) {
+			const revertBtn = document.createElement('button');
+			revertBtn.className = 'btn btn-outline btn-danger';
+			revertBtn.style.marginTop = '8px';
+			revertBtn.style.fontSize = '10px';
+			revertBtn.style.padding = '6px 12px';
+			revertBtn.style.display = 'inline-flex';
+			revertBtn.style.alignItems = 'center';
+			revertBtn.style.gap = '4px';
+			revertBtn.style.alignSelf = 'flex-start';
+			revertBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg> Revert Changes`;
 			
-			discardBtn.addEventListener('click', () => {
-				acceptBtn.disabled = true;
-				discardBtn.disabled = true;
-				if (applied) {
-					btnGroup.remove();
-					const msg = document.createElement('div');
-					msg.style.color = 'var(--error)';
-					msg.style.fontWeight = '600';
-					msg.style.fontSize = '10.5px';
-					msg.style.marginTop = '4px';
-					msg.innerText = '✗ Reverting changes...';
-					wrapper.appendChild(msg);
-					
-					log(`User discarded the AI modifications. Undoing ${appliedChangesCount} operations...`, 'warning');
-					performMultipleUndos(appliedChangesCount, () => {
-						log('Reversal complete. Document successfully restored.', 'success');
+			wrapper.appendChild(revertBtn);
+			
+			return new Promise((resolve) => {
+				revertBtn.addEventListener('click', () => {
+					revertBtn.disabled = true;
+					revertBtn.innerHTML = 'Reverting...';
+					log(`Undoing edits for this prompt...`, 'info');
+					performMultipleUndos(changes.length, () => {
+						revertBtn.innerHTML = '✓ Reverted';
+						revertBtn.className = 'btn';
+						revertBtn.style.background = '#f3f4f6';
+						revertBtn.style.color = '#9ca3af';
+						revertBtn.style.border = '1px solid #e5e7eb';
+						
+						const msg = document.createElement('div');
+						msg.style.color = 'var(--error)';
+						msg.style.fontWeight = '600';
+						msg.style.fontSize = '10.5px';
+						msg.style.marginTop = '4px';
 						msg.innerText = '✗ Changes discarded & reverted.';
-						appliedChangesCount = 0;
-						undoAiBtn.style.display = 'none';
+						wrapper.appendChild(msg);
+						
+						log('Changes successfully reverted.', 'success');
 						debouncedRefresh();
+						resolve('discard');
 					});
-				} else {
-					wrapper.innerHTML = '<div style="color: var(--text-muted); font-style: italic; margin-top: 4px;">Proposed changes discarded.</div>';
-				}
-				resolve('discard');
+				});
 			});
-		});
+		} else {
+			const btnGroup = document.createElement('div');
+			btnGroup.style.display = 'flex';
+			btnGroup.style.gap = '6px';
+			btnGroup.style.marginTop = '6px';
+			
+			const acceptBtn = document.createElement('button');
+			acceptBtn.className = 'btn';
+			acceptBtn.innerText = 'Accept & Apply';
+			acceptBtn.style.flex = '1.2';
+			acceptBtn.style.fontSize = '10px';
+			acceptBtn.style.padding = '6px';
+			acceptBtn.style.background = 'var(--success)';
+			
+			const discardBtn = document.createElement('button');
+			discardBtn.className = 'btn btn-outline btn-danger';
+			discardBtn.innerText = 'Discard';
+			discardBtn.style.flex = '0.8';
+			discardBtn.style.fontSize = '10px';
+			discardBtn.style.padding = '6px';
+			
+			btnGroup.appendChild(acceptBtn);
+			btnGroup.appendChild(discardBtn);
+			wrapper.appendChild(btnGroup);
+			
+			return new Promise((resolve) => {
+				acceptBtn.addEventListener('click', () => {
+					acceptBtn.disabled = true;
+					discardBtn.disabled = true;
+					acceptBtn.innerText = 'Applying...';
+					resolve('accept');
+				});
+				
+				discardBtn.addEventListener('click', () => {
+					acceptBtn.disabled = true;
+					discardBtn.disabled = true;
+					wrapper.innerHTML = '<div style="color: var(--text-muted); font-style: italic; margin-top: 4px;">Proposed changes discarded.</div>';
+					resolve('discard');
+				});
+			});
+		}
 	}
 
 	// Render Executive Summary Inline
