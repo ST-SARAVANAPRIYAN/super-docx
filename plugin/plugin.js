@@ -2152,7 +2152,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 			// LAYER 2: Context Builder Serialization mode determination
 			let serializationMode = "minimal";
-			if (intent === INTENTS.FORMAT || intent === INTENTS.INSERT_CONTENT || intent === INTENTS.DELETE_CONTENT) {
+			if (intent === INTENTS.FORMAT || intent === INTENTS.INSERT_CONTENT || intent === INTENTS.DELETE_CONTENT || intent === INTENTS.REWRITE) {
 				serializationMode = "medium";
 			} else if (intent === INTENTS.CREATE_DOCUMENT || intent === INTENTS.RESTRUCTURE || intent === INTENTS.ANALYZE) {
 				serializationMode = "full";
@@ -3163,7 +3163,21 @@ User Request:
 						if (startIndex === -1) startIndex = 0;
 						
 						// Get paragraph style details first for run style delta-compression
-						var paraStyle = (targetMode !== "minimal") ? extractParagraphStyle(selPara) : null;
+						var paraStyle = extractParagraphStyle(selPara);
+						var cleanText = (selectedText || "").trim().replace(/[\r\n\t]+/g, '');
+						var isHeading = false;
+						
+						if (paraStyle) {
+							if (paraStyle.styleName && paraStyle.styleName.toLowerCase().indexOf("heading") !== -1) {
+								isHeading = true;
+							} else if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
+								isHeading = true;
+							} else if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
+								isHeading = true;
+							} else if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
+								isHeading = true;
+							}
+						}
 						var runsData = [];
 						
 						if (targetMode === "full") {
@@ -3230,7 +3244,7 @@ User Request:
 						}
 						
 						var elementJSON = {
-							type: "paragraph",
+							type: isHeading ? "heading" : "paragraph",
 							index: absoluteIndex,
 							text: selectedText
 						};
@@ -3348,19 +3362,19 @@ User Request:
 							
 							if (type === "paragraph") {
 								var oText = oElement.GetText() || "";
-								var paraStyle = (targetMode !== "minimal") ? extractParagraphStyle(oElement) : null;
+								var paraStyle = extractParagraphStyle(oElement);
 								
 								var cleanText = oText.trim().replace(/[\r\n\t]+/g, '');
 								var isHeading = false;
 								
-								if (targetMode === "full" && paraStyle) {
-									if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
+								if (paraStyle) {
+									if (paraStyle.styleName && paraStyle.styleName.toLowerCase().indexOf("heading") !== -1) {
 										isHeading = true;
-									}
-									if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
+									} else if ((paraStyle.fontSize * 2 >= 28 || (paraStyle.bold && paraStyle.fontSize * 2 >= 24)) && cleanText.length > 0 && cleanText.length < 150) {
 										isHeading = true;
-									}
-									if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
+									} else if (cleanText.length > 3 && cleanText.length < 80 && cleanText === cleanText.toUpperCase() && !/^\d+$/.test(cleanText)) {
+										isHeading = true;
+									} else if (/^(Chapter\s+\d+|\d+(\.\d+)*\s+[A-Za-z])/i.test(cleanText) && cleanText.length < 100) {
 										isHeading = true;
 									}
 								}
@@ -3371,7 +3385,7 @@ User Request:
 								}
 								
 								var elementJSON = {
-									type: "paragraph",
+									type: isHeading ? "heading" : "paragraph",
 									index: i,
 									text: oText
 								};
