@@ -439,7 +439,7 @@
 	// Render Contextual ONLYOFFICE Toolbar
 	function renderContextToolbar(type, props = {}) {
 		if (!contextToolbar) return;
-		if (type === "none" || !type) {
+		if (type === "none" || !type || type === "text") {
 			contextToolbar.style.display = "none";
 			return;
 		}
@@ -1485,6 +1485,9 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 	function clearLogFile() {
 		logLines = [];
 		localStorage.removeItem(logStorageKey);
+		if (logContainer) {
+			logContainer.innerHTML = '';
+		}
 		log('Developer log file cleared.', 'warning');
 	}
 
@@ -1695,7 +1698,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		structureJson.value = "Scanning active document structure JSON...";
 		try {
 			const docJSON = await serializeActiveContent();
-			const parsed = JSON.parse(docJSON);
+			const parsed = parseSerializedData(docJSON);
 			structureJson.value = JSON.stringify(parsed, null, 2);
 
 			// Render Outline Tree Map
@@ -1712,6 +1715,11 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 				badge.style.color = hasSelection ? 'var(--accent-green)' : 'var(--primary)';
 				badge.style.background = hasSelection ? 'rgba(16, 185, 129, 0.08)' : 'var(--primary-glow)';
 			}
+
+			// Update dynamic toolbar sequentially to avoid queue collision
+			try {
+				await updateDynamicToolbar();
+			} catch(eToolbar) {}
 
 			log(`Compiled structural JSON successfully [Mode: ${parsed.mode}].`, "success");
 		} catch(err) {
@@ -1779,7 +1787,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		log("Capturing active document snapshot...", "info");
 		try {
 			const docJSON = await serializeActiveContent();
-			const snapshot = JSON.parse(docJSON);
+			const snapshot = parseSerializedData(docJSON);
 			const cp = {
 				timestamp: new Date().toLocaleTimeString(),
 				data: snapshot
@@ -1796,7 +1804,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		log("Capturing auto-checkpoint before execution...", "info");
 		try {
 			const docJSON = await serializeActiveContent();
-			const snapshot = JSON.parse(docJSON);
+			const snapshot = parseSerializedData(docJSON);
 			const cp = {
 				timestamp: new Date().toLocaleTimeString(),
 				prompt: promptText,
@@ -1936,32 +1944,39 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		
 		// Attach to selection change event to dynamically update the JSON structure view instantly!
 		try {
-			this.attachEvent("onSelectionChanged", function() {
-				debouncedRefresh();
-				updateDynamicToolbar();
+			window.Asc.plugin.attachEvent("onSelectionChanged", function() {
+				if (!isEditingAutonomously) {
+					debouncedRefresh();
+				}
 			});
-		} catch(e) {}
+		} catch(e) {
+			log("Failed to attach onSelectionChanged: " + e.message, "warning");
+		}
 
 		try {
-			this.attachEvent("onTargetPositionChanged", function() {
-				debouncedRefresh();
-				updateDynamicToolbar();
+			window.Asc.plugin.attachEvent("onTargetPositionChanged", function() {
+				if (!isEditingAutonomously) {
+					debouncedRefresh();
+				}
 			});
-		} catch(e) {}
+		} catch(e) {
+			log("Failed to attach onTargetPositionChanged: " + e.message, "warning");
+		}
 		
 		// Initial scan and toolbar load
 		refreshDocStructureView();
-		updateDynamicToolbar();
 	};
 
 	// Fallback direct event assignments on the plugin object
 	window.Asc.plugin.event_onSelectionChanged = function() {
-		debouncedRefresh();
-		updateDynamicToolbar();
+		if (!isEditingAutonomously) {
+			debouncedRefresh();
+		}
 	};
 	window.Asc.plugin.event_onTargetPositionChanged = function() {
-		debouncedRefresh();
-		updateDynamicToolbar();
+		if (!isEditingAutonomously) {
+			debouncedRefresh();
+		}
 	};
 
 	// Bind Undo / Redo toolbar events
@@ -1995,7 +2010,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 		try {
 			const docJSON = await serializeActiveContent();
-			const parsed = JSON.parse(docJSON);
+			const parsed = parseSerializedData(docJSON);
 			log(`Summarizing active range [${parsed.mode === 'selection' ? 'Selection Only' : 'Entire Document'}]...`, 'info');
 
 			const messages = [
@@ -2147,7 +2162,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 			log(`[CONTEXT_BUILDER] Selected serialization mode: [${serializationMode.toUpperCase()}] for routed intent [${intent.toUpperCase()}].`, 'info');
 			const docJSON = await serializeActiveContent(serializationMode);
-			cachedDocData = JSON.parse(docJSON);
+			cachedDocData = parseSerializedData(docJSON);
 			
 			lastExecutionDebugData.stateBefore = cachedDocData.sections || [];
 			if (typeof updateDebugViewer === 'function') updateDebugViewer();
@@ -2604,9 +2619,13 @@ User Request:
 			}, 5000);
 
 			window.Asc.scope.mode = mode;
+			window.Asc.scope.prompt = promptInput ? promptInput.value.trim() : "";
+			window.Asc.scope.selectionHtml = (window.Asc.plugin.info && window.Asc.plugin.info.selectionHtml) ? window.Asc.plugin.info.selectionHtml : "";
 
 			window.Asc.plugin.callCommand(function() {
 				var targetMode = Asc.scope.mode || "minimal";
+				var prompt = Asc.scope.prompt || "";
+				var selectionHtml = Asc.scope.selectionHtml || "";
 				// Helper to extract styling from character run with full hierarchy inheritance
 				function extractRunStyle(oRun, oElement) {
 					var rFontName = "";
@@ -2989,7 +3008,18 @@ User Request:
 				var isSelection = false;
 				var selectedParagraphs = [];
 				var selectedLines = [];
-				if (oRange) {
+				
+				// Force entire document mode if prompt indicates a document-wide intent
+				var forceEntireDoc = /entire\s+doc|whole\s+doc|all\s+sections|entire\s+document|whole\s+document|format\s+everything|all\s+paragraphs/i.test(prompt);
+				var hasHighlight = false;
+				if (selectionHtml) {
+					hasHighlight = selectionHtml.trim().length > 0;
+				} else {
+					var rText = oRange ? (oRange.GetText() || "") : "";
+					hasHighlight = rText.replace(/[\r\n\s\t]+/g, "").length > 0;
+				}
+				
+				if (oRange && hasHighlight && !forceEntireDoc) {
 					var rText = oRange.GetText() || "";
 					var cleanText = rText.replace(/[\r\n\s\t]+/g, "");
 					if (cleanText.length > 0) {
@@ -3025,7 +3055,7 @@ User Request:
 					} catch(e) {}
 				}
 
-				if (targetMode === "full") {
+				if (targetMode === "full" || targetMode === "medium") {
 					// Compile global document outline map & section styles beforehand
 					for (var h = 0; h < elementsCount; h++) {
 						try {
@@ -3454,6 +3484,13 @@ User Request:
 		});
 	}
 
+	function parseSerializedData(data) {
+		if (typeof data === "object" && data !== null) {
+			return data;
+		}
+		return JSON.parse(data);
+	}
+
 	// Unified LLM Requester supporting Groq API
 	async function queryActiveLLM(messages, temperature = 0.1, isJsonMode = false) {
 		const controller = new AbortController();
@@ -3798,7 +3835,7 @@ User Request:
 										if (formatState.color) {
 											try {
 												var hex = String(formatState.color).replace('#', '').trim();
-												if (hex.length === 6) {
+												if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 													var red = parseInt(hex.substring(0, 2), 16);
 													var green = parseInt(hex.substring(2, 4), 16);
 													var blue = parseInt(hex.substring(4, 6), 16);
@@ -3987,7 +4024,7 @@ User Request:
 											if (formatState.color) {
 												try {
 													var hex = String(formatState.color).replace('#', '').trim();
-													if (hex.length === 6) {
+													if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 														var red = parseInt(hex.substring(0, 2), 16);
 														var green = parseInt(hex.substring(2, 4), 16);
 														var blue = parseInt(hex.substring(4, 6), 16);
@@ -4274,7 +4311,7 @@ User Request:
 									var colorHex = oProps.borderColor || "#000000";
 									var hex = String(colorHex).replace('#', '').trim();
 									var r = 0, g = 0, b = 0;
-									if (hex.length === 6) {
+									if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 										r = parseInt(hex.substring(0, 2), 16);
 										g = parseInt(hex.substring(2, 4), 16);
 										b = parseInt(hex.substring(4, 6), 16);
@@ -4389,7 +4426,7 @@ User Request:
 										if (formatState.color) {
 											try {
 												var hex = String(formatState.color).replace('#', '').trim();
-												if (hex.length === 6) {
+												if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 													var red = parseInt(hex.substring(0, 2), 16);
 													var green = parseInt(hex.substring(2, 4), 16);
 													var blue = parseInt(hex.substring(4, 6), 16);
@@ -4578,7 +4615,7 @@ User Request:
 											if (formatState.color) {
 												try {
 													var hex = String(formatState.color).replace('#', '').trim();
-													if (hex.length === 6) {
+													if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 														var red = parseInt(hex.substring(0, 2), 16);
 														var green = parseInt(hex.substring(2, 4), 16);
 														var blue = parseInt(hex.substring(4, 6), 16);
@@ -4668,84 +4705,168 @@ User Request:
 									if (oProps.newText !== undefined) {
 										parseAndApplyTextWithTags(oParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
 									} else {
-										// Directly apply styles to existing runs without recreating/destroying them!
-										var runCount = oParagraph.GetElementsCount();
-										for (var r = 0; r < runCount; r++) {
-											var oRun = oParagraph.GetElement(r);
-											if (oRun && oRun.GetClassType() === "run") {
-												if (oProps.fontName !== undefined) {
-													try { oRun.SetFontFamily(oProps.fontName); } catch(e) {}
-													try { oRun.SetFontName(oProps.fontName); } catch(e) {}
-												}
-												if (oProps.fontSize !== undefined) {
-													try { oRun.SetFontSize(oProps.fontSize); } catch(e) {}
-												}
-												if (oProps.bold !== undefined) {
-													try { oRun.SetBold(!!oProps.bold); } catch(e) {}
-												}
-												if (oProps.italic !== undefined) {
-													try { oRun.SetItalic(!!oProps.italic); } catch(e) {}
-												}
-												if (oProps.underline !== undefined) {
-													try { oRun.SetUnderline(!!oProps.underline); } catch(e) {}
-												}
-												if (oProps.strikeout !== undefined) {
-													try { oRun.SetStrikeout(!!oProps.strikeout); } catch(e) {}
-												}
-												if (oProps.doubleStrikeout !== undefined) {
-													try { oRun.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
-												}
-												if (oProps.smallCaps !== undefined) {
-													try { oRun.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
-												}
-												if (oProps.caps !== undefined) {
-													try { oRun.SetCaps(!!oProps.caps); } catch(e) {}
-												}
-												if (oProps.subscript !== undefined) {
-													try { oRun.SetSubscript(!!oProps.subscript); } catch(e) {}
-												}
-												if (oProps.superscript !== undefined) {
-													try { oRun.SetSuperscript(!!oProps.superscript); } catch(e) {}
-												}
-												if (oProps.characterSpacing !== undefined) {
-													try { oRun.SetSpacing(oProps.characterSpacing); } catch(e) {}
-												}
-												if (oProps.highlight !== undefined) {
-													try {
-														var hl = oProps.highlight.toLowerCase().trim();
-														if (hl === "none" || hl === "null" || hl === "default") oRun.SetHighlight("none");
-														else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oRun.SetHighlight("yellow");
-														else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oRun.SetHighlight("green");
-														else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oRun.SetHighlight("blue");
-														else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oRun.SetHighlight("cyan");
-														else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oRun.SetHighlight("red");
-														else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oRun.SetHighlight("magenta");
-														else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oRun.SetHighlight("lightGray");
-														else oRun.SetHighlight(hl);
-													} catch(eHighlight) {}
-												}
-												if (oProps.color !== undefined) {
-													try {
-														var hex = String(oProps.color).replace('#', '').trim();
-														if (hex.length === 6) {
-															var red = parseInt(hex.substring(0, 2), 16);
-															var green = parseInt(hex.substring(2, 4), 16);
-															var blue = parseInt(hex.substring(4, 6), 16);
-															try { oRun.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
-																try { oRun.SetColor(red, green, blue); } catch(errHex) {}
-															}
-														} else {
-															var namedColors = {
-																"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
-																"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
-																"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
-															};
-															if (namedColors[hex.toLowerCase()]) {
-																var rgb = namedColors[hex.toLowerCase()];
-																oRun.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
-															}
+										// If in selection mode and a valid Range exists, apply run formatting directly to the active range!
+										var oRange = null;
+										try { oRange = oDocument.GetRangeBySelect(); } catch(e) {}
+										var isSelectionMode = (change.mode === 'selection' || (cachedDocData && cachedDocData.mode === 'selection'));
+										
+										if (isSelectionMode && oRange && (oRange.GetText() || "").trim().length > 0) {
+											var targetObj = oRange;
+											if (oProps.fontName !== undefined) {
+												try { targetObj.SetFontFamily(oProps.fontName); } catch(e) {}
+												try { targetObj.SetFontName(oProps.fontName); } catch(e) {}
+											}
+											if (oProps.fontSize !== undefined) {
+												try { targetObj.SetFontSize(oProps.fontSize); } catch(e) {}
+											}
+											if (oProps.bold !== undefined) {
+												try { targetObj.SetBold(!!oProps.bold); } catch(e) {}
+											}
+											if (oProps.italic !== undefined) {
+												try { targetObj.SetItalic(!!oProps.italic); } catch(e) {}
+											}
+											if (oProps.underline !== undefined) {
+												try { targetObj.SetUnderline(!!oProps.underline); } catch(e) {}
+											}
+											if (oProps.strikeout !== undefined) {
+												try { targetObj.SetStrikeout(!!oProps.strikeout); } catch(e) {}
+											}
+											if (oProps.doubleStrikeout !== undefined) {
+												try { targetObj.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
+											}
+											if (oProps.smallCaps !== undefined) {
+												try { targetObj.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
+											}
+											if (oProps.caps !== undefined) {
+												try { targetObj.SetCaps(!!oProps.caps); } catch(e) {}
+											}
+											if (oProps.subscript !== undefined) {
+												try { targetObj.SetSubscript(!!oProps.subscript); } catch(e) {}
+											}
+											if (oProps.superscript !== undefined) {
+												try { targetObj.SetSuperscript(!!oProps.superscript); } catch(e) {}
+											}
+											if (oProps.characterSpacing !== undefined) {
+												try { targetObj.SetSpacing(oProps.characterSpacing); } catch(e) {}
+											}
+											if (oProps.highlight !== undefined) {
+												try {
+													var hl = oProps.highlight.toLowerCase().trim();
+													if (hl === "none" || hl === "null" || hl === "default") targetObj.SetHighlight("none");
+													else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") targetObj.SetHighlight("yellow");
+													else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") targetObj.SetHighlight("green");
+													else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") targetObj.SetHighlight("blue");
+													else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") targetObj.SetHighlight("cyan");
+													else if (hl.indexOf("red") !== -1 || hl === "#ff0000") targetObj.SetHighlight("red");
+													else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") targetObj.SetHighlight("magenta");
+													else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") targetObj.SetHighlight("lightGray");
+													else targetObj.SetHighlight(hl);
+												} catch(eHighlight) {}
+											}
+											if (oProps.color !== undefined) {
+												try {
+													var hex = String(oProps.color).replace('#', '').trim();
+													if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+														var red = parseInt(hex.substring(0, 2), 16);
+														var green = parseInt(hex.substring(2, 4), 16);
+														var blue = parseInt(hex.substring(4, 6), 16);
+														try { targetObj.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+															try { targetObj.SetColor(red, green, blue); } catch(errHex) {}
 														}
-													} catch(eColorOuter) {}
+													} else {
+														var namedColors = {
+															"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+															"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+															"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+														};
+														if (namedColors[hex.toLowerCase()]) {
+															var rgb = namedColors[hex.toLowerCase()];
+															targetObj.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+														}
+													}
+												} catch(eColorOuter) {}
+											}
+										} else {
+											// Fallback to applying styles to all runs of the paragraph
+											var runCount = oParagraph.GetElementsCount();
+											for (var r = 0; r < runCount; r++) {
+												var oRun = oParagraph.GetElement(r);
+												if (oRun && oRun.GetClassType() === "run") {
+													var targetObj = oRun;
+													if (oProps.fontName !== undefined) {
+														try { targetObj.SetFontFamily(oProps.fontName); } catch(e) {}
+														try { targetObj.SetFontName(oProps.fontName); } catch(e) {}
+													}
+													if (oProps.fontSize !== undefined) {
+														try { targetObj.SetFontSize(oProps.fontSize); } catch(e) {}
+													}
+													if (oProps.bold !== undefined) {
+														try { targetObj.SetBold(!!oProps.bold); } catch(e) {}
+													}
+													if (oProps.italic !== undefined) {
+														try { targetObj.SetItalic(!!oProps.italic); } catch(e) {}
+													}
+													if (oProps.underline !== undefined) {
+														try { targetObj.SetUnderline(!!oProps.underline); } catch(e) {}
+													}
+													if (oProps.strikeout !== undefined) {
+														try { targetObj.SetStrikeout(!!oProps.strikeout); } catch(e) {}
+													}
+													if (oProps.doubleStrikeout !== undefined) {
+														try { targetObj.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
+													}
+													if (oProps.smallCaps !== undefined) {
+														try { targetObj.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
+													}
+													if (oProps.caps !== undefined) {
+														try { targetObj.SetCaps(!!oProps.caps); } catch(e) {}
+													}
+													if (oProps.subscript !== undefined) {
+														try { targetObj.SetSubscript(!!oProps.subscript); } catch(e) {}
+													}
+													if (oProps.superscript !== undefined) {
+														try { targetObj.SetSuperscript(!!oProps.superscript); } catch(e) {}
+													}
+													if (oProps.characterSpacing !== undefined) {
+														try { targetObj.SetSpacing(oProps.characterSpacing); } catch(e) {}
+													}
+													if (oProps.highlight !== undefined) {
+														try {
+															var hl = oProps.highlight.toLowerCase().trim();
+															if (hl === "none" || hl === "null" || hl === "default") targetObj.SetHighlight("none");
+															else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") targetObj.SetHighlight("yellow");
+															else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") targetObj.SetHighlight("green");
+															else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") targetObj.SetHighlight("blue");
+															else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") targetObj.SetHighlight("cyan");
+															else if (hl.indexOf("red") !== -1 || hl === "#ff0000") targetObj.SetHighlight("red");
+															else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") targetObj.SetHighlight("magenta");
+															else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") targetObj.SetHighlight("lightGray");
+															else targetObj.SetHighlight(hl);
+														} catch(eHighlight) {}
+													}
+													if (oProps.color !== undefined) {
+														try {
+															var hex = String(oProps.color).replace('#', '').trim();
+															if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+																var red = parseInt(hex.substring(0, 2), 16);
+																var green = parseInt(hex.substring(2, 4), 16);
+																var blue = parseInt(hex.substring(4, 6), 16);
+																try { targetObj.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+																	try { targetObj.SetColor(red, green, blue); } catch(errHex) {}
+																}
+															} else {
+																var namedColors = {
+																	"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+																	"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+																	"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+																};
+																if (namedColors[hex.toLowerCase()]) {
+																	var rgb = namedColors[hex.toLowerCase()];
+																	targetObj.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+																}
+															}
+														} catch(eColorOuter) {}
+													}
 												}
 											}
 										}
@@ -4786,7 +4907,7 @@ User Request:
 								try {
 									if (oProps.shading !== undefined && oParagraph.SetShd) {
 										var hex = String(oProps.shading).replace('#', '').trim();
-										if (hex.length === 6) {
+										if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 											var r = parseInt(hex.substring(0, 2), 16);
 											var g = parseInt(hex.substring(2, 4), 16);
 											var b = parseInt(hex.substring(4, 6), 16);
@@ -4937,7 +5058,7 @@ User Request:
 					if (formatState.color) {
 						try {
 							var hex = String(formatState.color).replace('#', '').trim();
-							if (hex.length === 6) {
+							if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 								var red = parseInt(hex.substring(0, 2), 16);
 								var green = parseInt(hex.substring(2, 4), 16);
 								var blue = parseInt(hex.substring(4, 6), 16);
@@ -5132,7 +5253,7 @@ User Request:
 						if (formatState.color) {
 							try {
 								var hex = String(formatState.color).replace('#', '').trim();
-								if (hex.length === 6) {
+								if (/^[0-9a-fA-F]{6}$/.test(hex)) {
 									var r = parseInt(hex.substring(0, 2), 16);
 									var g = parseInt(hex.substring(2, 4), 16);
 									var b = parseInt(hex.substring(4, 6), 16);

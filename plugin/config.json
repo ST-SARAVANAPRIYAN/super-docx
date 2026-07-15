@@ -45,6 +45,10 @@
 
       "buttons": [],
       "initOnSelectionChanged": false,
+      "events": [
+        "onSelectionChanged",
+        "onTargetPositionChanged"
+      ],
       "store": {
         "background": {
           "light": "#f59e0b",
