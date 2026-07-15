@@ -1324,6 +1324,14 @@
 				
 				<!-- 1. AI CHAT & ASSISTANT VIEW PANE -->
 				<div class="view-pane active" id="view-prompt">
+					<!-- Chat View Header -->
+					<div class="view-header" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+						<span style="font-weight: 600; font-size: 11px; color: var(--text-primary);">AI Copilot Chat</span>
+						<button class="header-action-btn" id="clear-chat-btn" title="Clear Chat & Start New" style="display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border-color); padding: 3px 8px; border-radius: 4px; font-size: 9.5px; background: transparent; cursor: pointer; color: var(--text-secondary); transition: var(--transition);" onmouseover="this.style.background='var(--primary-glow)';this.style.color='var(--primary)';" onmouseout="this.style.background='transparent';this.style.color='var(--text-secondary)';">
+							<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg> New Chat
+						</button>
+					</div>
+
 					<!-- Selection Context Toolbar (Injected Dynamically) -->
 					<div class="card" id="context-toolbar" style="display: none; padding: 10px; margin-bottom: 8px; flex-shrink: 0;">
 						<!-- Toolbar HTML injected via plugin.js -->
@@ -1512,6 +1520,6 @@
 	<!-- System libraries -->
 	<script type="text/javascript" src="./../v1/plugins.js"></script>
 	<script type="text/javascript" src="./../v1/plugins-ui.js"></script>
-	<script src="plugin.js?v=1784112901"></script>
+	<script src="plugin.js?v=1784113099"></script>
 </body>
 </html>

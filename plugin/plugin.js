@@ -45,7 +45,6 @@
 	let logLines = [];
 
 	// Summarization elements
-	const chipSummarize = document.getElementById('chip-summarize');
 	let activeSummaryContent = '';
 
 	// Session Checkpoints elements
@@ -1497,14 +1496,8 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		updateCostBadge();
 	});
 
-	// Suggestion Chips handler
-	document.querySelectorAll('.chip').forEach(chip => {
-		if (chip.id === 'chip-summarize') return; // Skip special chip
-		chip.addEventListener('click', () => {
-			promptInput.value = chip.getAttribute('data-prompt');
-			promptInput.focus();
-		});
-	});
+	// Initial welcome screen render and Suggestion Chips handler
+	renderWelcomeScreen();
 
 	// Logging persistence helpers
 	function loadLogFile() {
@@ -2026,8 +2019,8 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		});
 	});
 
-	// Bind chip-summarize click event (fully dynamic)
-	chipSummarize.addEventListener('click', async () => {
+	// Executive Summarization logic handler
+	async function handleSummarizeClick() {
 		const hasToken = localStorage.getItem('groq_copilot_key');
 		
 		if (!hasToken) {
@@ -2069,7 +2062,49 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		} finally {
 			setLoading(false);
 		}
-	});
+	}
+
+	// Chat Canvas Welcome view renderer
+	function renderWelcomeScreen() {
+		if (!chatHistoryContainer) return;
+		chatHistoryContainer.innerHTML = `
+			<div class="chat-welcome">
+				<div class="welcome-icon">
+					<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+				</div>
+				<div style="font-weight: 700; font-size: 13px; margin-bottom: 4px; color: var(--text-primary);">OneScript AI</div>
+				<div style="margin-bottom: 12px; font-size: 11px; line-height: 1.45; color: var(--text-secondary); max-width: 250px;">Direct AI copilot for ONLYOFFICE. Highlight text to edit, format, translate, or write outline commands.</div>
+				<div class="suggestion-container">
+					<span class="chip chip-special" id="chip-summarize">Summarize Selection</span>
+					<span class="chip" data-prompt="Format document: Georgia font, size 12pt, line-spacing 1.5, headers Crimson (#dc2626).">Modern Styling</span>
+					<span class="chip" data-prompt="Insert an action item bulleted list: 'Schedule sync', 'Review logs', 'Run validation'.">Action Bullets</span>
+					<span class="chip" data-prompt="Rewrite paragraph #2 to be much more professional, technical and concise.">Polished Text</span>
+				</div>
+			</div>
+		`;
+		
+		const btnSummarize = document.getElementById('chip-summarize');
+		if (btnSummarize) {
+			btnSummarize.addEventListener('click', handleSummarizeClick);
+		}
+		
+		chatHistoryContainer.querySelectorAll('.chip').forEach(chip => {
+			if (chip.id === 'chip-summarize') return;
+			chip.addEventListener('click', () => {
+				promptInput.value = chip.getAttribute('data-prompt');
+				promptInput.focus();
+			});
+		});
+	}
+
+	// Bind New Chat Clear action button
+	const clearChatBtn = document.getElementById('clear-chat-btn');
+	if (clearChatBtn) {
+		clearChatBtn.addEventListener('click', () => {
+			log("Clearing chat history and initiating a new session...", "info");
+			renderWelcomeScreen();
+		});
+	}
 
 	// Real-Time Stepper Progress Component Helpers
 	function updateAgentStepper(aiMessageBody, steps) {
