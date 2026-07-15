@@ -1317,25 +1317,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		});
 	}
 
-	// Update Selection Context Scope Badge
-	function updateScopeBadge() {
-		window.Asc.plugin.callCommand(function() {
-			var oRange = Api.GetDocument().GetRangeBySelect();
-			if (oRange) {
-				var rText = oRange.GetText() || "";
-				return rText.replace(/[\r\n\s\t]+/g, "").length > 0;
-			}
-			return false;
-		}, false, true, function(hasSelection) {
-			const badge = document.getElementById('prompt-scope-badge');
-			if (badge) {
-				badge.innerText = hasSelection ? 'Selection' : 'Entire Doc';
-				badge.style.borderColor = hasSelection ? 'rgba(16, 185, 129, 0.4)' : 'rgba(122, 162, 247, 0.3)';
-				badge.style.color = hasSelection ? 'var(--accent-green)' : 'var(--primary)';
-				badge.style.background = hasSelection ? 'rgba(16, 185, 129, 0.08)' : 'var(--primary-glow)';
-			}
-		});
-	}
+	// Selection Context Scope Badge is updated dynamically by refreshDocStructureView
 
 	// Scan range is now dynamic and automatic
 
@@ -1901,7 +1883,6 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			this.attachEvent("onSelectionChanged", function() {
 				debouncedRefresh();
 				updateDynamicToolbar();
-				updateScopeBadge();
 			});
 		} catch(e) {}
 
@@ -1909,26 +1890,22 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			this.attachEvent("onTargetPositionChanged", function() {
 				debouncedRefresh();
 				updateDynamicToolbar();
-				updateScopeBadge();
 			});
 		} catch(e) {}
 		
 		// Initial scan and toolbar load
 		refreshDocStructureView();
 		updateDynamicToolbar();
-		updateScopeBadge();
 	};
 
 	// Fallback direct event assignments on the plugin object
 	window.Asc.plugin.event_onSelectionChanged = function() {
 		debouncedRefresh();
 		updateDynamicToolbar();
-		updateScopeBadge();
 	};
 	window.Asc.plugin.event_onTargetPositionChanged = function() {
 		debouncedRefresh();
 		updateDynamicToolbar();
-		updateScopeBadge();
 	};
 
 	// Bind Undo / Redo toolbar events
