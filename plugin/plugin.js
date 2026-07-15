@@ -4865,7 +4865,91 @@ User Request:
 													}
 												} catch(eColorOuter) {}
 											}
-										} else {
+											// Paragraph-level text formatting (first attempt)
+											var oTextPr = null;
+											try { oTextPr = oParagraph.GetTextPr(); } catch(e) {}
+											if (!oTextPr) {
+												try { oTextPr = Api.CreateTextPr(); } catch(e) {}
+											}
+											
+											if (oTextPr) {
+												if (oProps.fontName !== undefined) {
+													try { oTextPr.SetFontFamily(oProps.fontName); } catch(e) {}
+													try { oTextPr.SetFontName(oProps.fontName); } catch(e) {}
+												}
+												if (oProps.fontSize !== undefined) {
+													try { oTextPr.SetFontSize(oProps.fontSize); } catch(e) {}
+												}
+												if (oProps.bold !== undefined) {
+													try { oTextPr.SetBold(!!oProps.bold); } catch(e) {}
+												}
+												if (oProps.italic !== undefined) {
+													try { oTextPr.SetItalic(!!oProps.italic); } catch(e) {}
+												}
+												if (oProps.underline !== undefined) {
+													try { oTextPr.SetUnderline(!!oProps.underline); } catch(e) {}
+												}
+												if (oProps.strikeout !== undefined) {
+													try { oTextPr.SetStrikeout(!!oProps.strikeout); } catch(e) {}
+												}
+												if (oProps.doubleStrikeout !== undefined) {
+													try { oTextPr.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
+												}
+												if (oProps.smallCaps !== undefined) {
+													try { oTextPr.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
+												}
+												if (oProps.caps !== undefined) {
+													try { oTextPr.SetCaps(!!oProps.caps); } catch(e) {}
+												}
+												if (oProps.subscript !== undefined) {
+													try { oTextPr.SetSubscript(!!oProps.subscript); } catch(e) {}
+												}
+												if (oProps.superscript !== undefined) {
+													try { oTextPr.SetSuperscript(!!oProps.superscript); } catch(e) {}
+												}
+												if (oProps.characterSpacing !== undefined) {
+													try { oTextPr.SetSpacing(oProps.characterSpacing); } catch(e) {}
+												}
+												if (oProps.highlight !== undefined) {
+													try {
+														var hl = oProps.highlight.toLowerCase().trim();
+														if (hl === "none" || hl === "null" || hl === "default") oTextPr.SetHighlight("none");
+														else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") oTextPr.SetHighlight("yellow");
+														else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") oTextPr.SetHighlight("green");
+														else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") oTextPr.SetHighlight("blue");
+														else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") oTextPr.SetHighlight("cyan");
+														else if (hl.indexOf("red") !== -1 || hl === "#ff0000") oTextPr.SetHighlight("red");
+														else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") oTextPr.SetHighlight("magenta");
+														else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") oTextPr.SetHighlight("lightGray");
+														else oTextPr.SetHighlight(hl);
+													} catch(eHighlight) {}
+												}
+												if (oProps.color !== undefined) {
+													try {
+														var hex = String(oProps.color).replace('#', '').trim();
+														if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+															var red = parseInt(hex.substring(0, 2), 16);
+															var green = parseInt(hex.substring(2, 4), 16);
+															var blue = parseInt(hex.substring(4, 6), 16);
+															try { oTextPr.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+																try { oTextPr.SetColor(red, green, blue); } catch(errHex) {}
+															}
+														} else {
+															var namedColors = {
+																"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+																"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+																"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+															};
+															if (namedColors[hex.toLowerCase()]) {
+																var rgb = namedColors[hex.toLowerCase()];
+																oTextPr.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+															}
+														}
+													} catch(eColorOuter) {}
+												}
+												try { oParagraph.SetTextPr(oTextPr); } catch(e) {}
+											}
+
 											// Fallback to applying styles to all runs of the paragraph
 											var runCount = oParagraph.GetElementsCount();
 											for (var r = 0; r < runCount; r++) {
