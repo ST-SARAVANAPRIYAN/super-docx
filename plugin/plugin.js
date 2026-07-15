@@ -3044,14 +3044,20 @@ User Request:
 					var firstAbsIndex = -1;
 					var lastAbsIndex = -1;
 					
+					// Pre-fetch all elements once to speed up lookup from O(N*M) to O(N)
+					var allDocElements = [];
+					for (var j = 0; j < elementsCount; j++) {
+						allDocElements.push(oDocument.GetElement(j));
+					}
+					
 					for (var i = 0; i < selectedParagraphs.length; i++) {
 						var selPara = selectedParagraphs[i];
 						if (!selPara) continue;
 						
 						// Find the absolute document element index
 						var absoluteIndex = -1;
-						for (var j = 0; j < elementsCount; j++) {
-							var docElem = oDocument.GetElement(j);
+						for (var j = 0; j < allDocElements.length; j++) {
+							var docElem = allDocElements[j];
 							if (docElem && docElem.GetClassType() === "paragraph") {
 								if (docElem === selPara) {
 									absoluteIndex = j;
@@ -3063,8 +3069,8 @@ User Request:
 						// Fallback check by text similarity if direct reference comparison fails
 						if (absoluteIndex === -1) {
 							var selText = selPara.GetText() || "";
-							for (var j = 0; j < elementsCount; j++) {
-								var docElem = oDocument.GetElement(j);
+							for (var j = 0; j < allDocElements.length; j++) {
+								var docElem = allDocElements[j];
 								if (docElem && docElem.GetClassType() === "paragraph" && docElem.GetText() === selText) {
 									absoluteIndex = j;
 									break;
@@ -3612,12 +3618,13 @@ User Request:
 		const maxRetries = 3;
 		
 		async function applyNext() {
-			if (i >= changes.length) {
-				log('All autonomous AI edits applied live, verified, and completed!', 'success');
-				setStepperStep(3, "done", `Applied ${changes.length} edits successfully`);
-				proposedChanges = null;
-				executeBtn.disabled = false;
-				isEditingAutonomously = false;
+			try {
+				if (i >= changes.length) {
+					log('All autonomous AI edits applied live, verified, and completed!', 'success');
+					setStepperStep(3, "done", `Applied ${changes.length} edits successfully`);
+					proposedChanges = null;
+					executeBtn.disabled = false;
+					isEditingAutonomously = false;
 				appliedChangesCount = changes.length;
 				undoAiBtn.style.display = 'inline-flex';
 
@@ -4810,6 +4817,13 @@ User Request:
 					i++;
 					setTimeout(applyNext, 300);
 				}
+			}
+			} catch (err) {
+				log(`Error executing autonomous edits at step ${i}: ${err.message}`, 'error');
+				setStepperStep(3, "failed", err.message);
+				isEditingAutonomously = false;
+				executeBtn.disabled = false;
+				proposedChanges = null;
 			}
 		}
 
