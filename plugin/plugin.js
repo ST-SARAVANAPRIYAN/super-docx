@@ -1675,11 +1675,23 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 	// Dynamic Document JSON Viewer compiler (debounced and fully dynamic)
 	let isScanning = false;
+	let scanPending = false;
 	let isEditingAutonomously = false;
 	async function refreshDocStructureView() {
-		if (isScanning || isEditingAutonomously) return;
+		if (isEditingAutonomously) return;
+		if (isScanning) {
+			scanPending = true;
+			return;
+		}
 		isScanning = true;
-		if (outlineTreeContainer) outlineTreeContainer.innerHTML = '<div class="outline-loading">Scanning document...</div>';
+		scanPending = false;
+
+		if (outlineTreeContainer) {
+			outlineTreeContainer.classList.add('scanning-refreshed');
+			if (outlineTreeContainer.innerHTML === '' || outlineTreeContainer.querySelector('.outline-loading')) {
+				outlineTreeContainer.innerHTML = '<div class="outline-loading">Scanning document...</div>';
+			}
+		}
 		structureJson.value = "Scanning active document structure JSON...";
 		try {
 			const docJSON = await serializeActiveContent();
@@ -1708,6 +1720,12 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			log("Error loading structure: " + err.message, "error");
 		} finally {
 			isScanning = false;
+			if (outlineTreeContainer) {
+				outlineTreeContainer.classList.remove('scanning-refreshed');
+			}
+			if (scanPending) {
+				setTimeout(refreshDocStructureView, 50);
+			}
 		}
 	}
 
@@ -1774,7 +1792,26 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 	}
 
+	async function saveAutoCheckpoint(promptText) {
+		log("Capturing auto-checkpoint before execution...", "info");
+		try {
+			const docJSON = await serializeActiveContent();
+			const snapshot = JSON.parse(docJSON);
+			const cp = {
+				timestamp: new Date().toLocaleTimeString(),
+				prompt: promptText,
+				data: snapshot
+			};
+			checkpoints.push(cp);
+			log(`Automatically saved checkpoint before prompt: "${promptText.substring(0, 20)}..."`, 'success');
+			renderCheckpointsUI();
+		} catch (err) {
+			log(`Failed to save auto-checkpoint: ${err.message}`, 'error');
+		}
+	}
+
 	function renderCheckpointsUI() {
+		if (!checkpointsList) return;
 		if (checkpoints.length === 0) {
 			checkpointsList.innerHTML = `<div style="font-size: 11px; color: var(--text-secondary); text-align: center; padding: 8px;">No checkpoints saved yet.</div>`;
 			return;
@@ -1783,9 +1820,13 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		checkpoints.forEach((cp, index) => {
 			const item = document.createElement('div');
 			item.className = 'checkpoint-item';
+			const label = cp.prompt ? `Auto: "${cp.prompt.substring(0, 18)}${cp.prompt.length > 18 ? '...' : ''}"` : `Snapshot #${index + 1}`;
 			item.innerHTML = `
-				<span>Snapshot #${index + 1} (${cp.timestamp})</span>
-				<button class="checkpoint-restore-btn" data-index="${index}">Restore</button>
+				<div class="checkpoint-info" style="display: flex; flex-direction: column; gap: 2px;">
+					<span class="checkpoint-label" style="font-weight: 600; font-size: 10.5px; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 140px;" title="${cp.prompt || ''}">${label}</span>
+					<span class="checkpoint-time" style="font-size: 9px; color: var(--text-muted);">${cp.timestamp}</span>
+				</div>
+				<button class="checkpoint-restore-btn" data-index="${index}" style="padding: 4px 8px; font-size: 9.5px; border-radius: var(--border-radius-boxy);">Restore</button>
 			`;
 			checkpointsList.appendChild(item);
 		});
@@ -1801,18 +1842,33 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 	async function restoreCheckpoint(index) {
 		const cp = checkpoints[index];
 		if (!cp) return;
-		log(`Restoring document state to Snapshot #${index + 1}...`, 'info');
+		log(`Restoring document state to Checkpoint #${index + 1}...`, 'info');
 		
 		let restoreChanges = [];
 		cp.data.sections.forEach(s => {
 			s.elements.forEach(el => {
-				if (el.type === "paragraph" && el.text) {
+				if (el.type === "paragraph") {
+					var props = {
+						newText: el.text || ""
+					};
+					if (el.style) {
+						if (el.style.fontName) props.fontName = el.style.fontName;
+						if (el.style.fontSize) props.fontSize = el.style.fontSize;
+						props.bold = !!el.style.bold;
+						props.italic = !!el.style.italic;
+						props.underline = !!el.style.underline;
+						props.strikeout = !!el.style.strikeout;
+						if (el.style.color) props.color = el.style.color;
+						if (el.style.alignment) props.alignment = el.style.alignment;
+						if (el.style.spacingAfter !== undefined) props.spacingAfter = el.style.spacingAfter;
+						if (el.style.spacingBefore !== undefined) props.spacingBefore = el.style.spacingBefore;
+						if (el.style.lineSpacing !== undefined) props.lineSpacing = el.style.lineSpacing;
+						if (el.style.shading !== undefined) props.shading = el.style.shading;
+					}
 					restoreChanges.push({
 						action: "modifyStyle",
 						targetIndex: el.index,
-						properties: {
-							newText: el.text
-						}
+						properties: props
 					});
 				}
 			});
@@ -2035,6 +2091,13 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		// Append AI placeholder
 		const aiMessage = appendChatMessage('ai', 'Initializing...', 'text');
 		activeAiMessageBody = aiMessage.querySelector('.message-body');
+
+		// Capture snapshot before executing
+		try {
+			await saveAutoCheckpoint(prompt);
+		} catch(e) {
+			log(`Could not capture auto-checkpoint: ${e.message}`, 'warning');
+		}
 
 		// Initialize Stepper
 		currentAgentSteps = [
