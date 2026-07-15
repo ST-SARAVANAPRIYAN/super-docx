@@ -34,6 +34,7 @@
 	let appliedChangesCount = 0;
 	let currentChatProposal = null;
 	let isInternalQuery = false;
+	let lastInternalQueryTime = 0;
 
 	// Undo / Redo selectors
 	const toolbarUndo = document.getElementById('toolbar-undo');
@@ -449,6 +450,7 @@
 				if (!result || result.type === "none") {
 					window.Asc.plugin.executeMethod("GetSelectionType", [], function(type) {
 						isInternalQuery = false;
+						lastInternalQueryTime = Date.now();
 						if (type === "drawing") {
 							resolve({ type: "image", properties: {} });
 						} else {
@@ -457,6 +459,7 @@
 					});
 				} else {
 					isInternalQuery = false;
+					lastInternalQueryTime = Date.now();
 					resolve(result);
 				}
 			});
@@ -1757,6 +1760,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		} finally {
 			isScanning = false;
 			isInternalQuery = false;
+			lastInternalQueryTime = Date.now();
 			if (outlineTreeContainer) {
 				outlineTreeContainer.classList.remove('scanning-refreshed');
 			}
@@ -1975,7 +1979,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		// Attach to selection change event to dynamically update the JSON structure view instantly!
 		try {
 			window.Asc.plugin.attachEvent("onSelectionChanged", function() {
-				if (!isEditingAutonomously && !isInternalQuery) {
+				if (!isEditingAutonomously && !isInternalQuery && (Date.now() - lastInternalQueryTime > 400)) {
 					debouncedRefresh();
 				}
 			});
@@ -1985,7 +1989,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 		try {
 			window.Asc.plugin.attachEvent("onTargetPositionChanged", function() {
-				if (!isEditingAutonomously && !isInternalQuery) {
+				if (!isEditingAutonomously && !isInternalQuery && (Date.now() - lastInternalQueryTime > 400)) {
 					debouncedRefresh();
 				}
 			});
@@ -1999,12 +2003,12 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 	// Fallback direct event assignments on the plugin object
 	window.Asc.plugin.event_onSelectionChanged = function() {
-		if (!isEditingAutonomously && !isInternalQuery) {
+		if (!isEditingAutonomously && !isInternalQuery && (Date.now() - lastInternalQueryTime > 400)) {
 			debouncedRefresh();
 		}
 	};
 	window.Asc.plugin.event_onTargetPositionChanged = function() {
-		if (!isEditingAutonomously && !isInternalQuery) {
+		if (!isEditingAutonomously && !isInternalQuery && (Date.now() - lastInternalQueryTime > 400)) {
 			debouncedRefresh();
 		}
 	};
@@ -2400,6 +2404,11 @@ Example response: {"intent": "rewrite"}`;
 
 You must NEVER generate OnlyOffice API commands directly (like Select(), AddElement(), etc.).
 You must ONLY output valid JSON containing a single "plans" key holding an array of high-level action objects.
+
+CRITICAL FORMATTING & ACTION RULES:
+1. You MUST ONLY use the allowed actions: "rewrite", "change_font", "change_color", "create_paragraph", "delete_paragraph", "paste_html", "make_list", "change_indent", "table_action". Do NOT invent or use other actions like "move_section", "rename_section", "move_paragraph", etc.
+2. To move or reorganize a section, use a sequence of "delete_paragraph" actions for the original paragraphs, and "paste_html" or "create_paragraph" actions to recreate/insert them at the destination index.
+3. When creating/inserting new paragraphs or sections, you MUST style them explicitly (via properties like fontName, fontSize, color, bold, alignment, spacing) to match the surrounding paragraphs in the document context. Do not leave styling default/blank.
 
 CRITICAL CARET/CURSOR ANCHORING RULES:
 1. If the user request asks to add, insert, generate, or create content (such as paragraphs, headings, lists, or tables) and a valid "cursorIndex" (>= 0) is specified in the document metadata under "metadata.cursorIndex", you MUST default to inserting/creating the content directly at or after the "cursorIndex" (i.e., targetIndex = cursorIndex).
@@ -3746,6 +3755,7 @@ User Request:
 					proposedChanges = null;
 					executeBtn.disabled = false;
 					isEditingAutonomously = false;
+					lastInternalQueryTime = Date.now();
 				appliedChangesCount = changes.length;
 				undoAiBtn.style.display = 'inline-flex';
 
@@ -4984,7 +4994,7 @@ User Request:
 											var runCount = oParagraph.GetElementsCount();
 											for (var r = 0; r < runCount; r++) {
 												var oRun = oParagraph.GetElement(r);
-												if (oRun && oRun.GetClassType() === "run") {
+												if (oRun && (oRun.GetClassType() === "run" || typeof oRun.SetUnderline === "function")) {
 													var targetObj = oRun;
 													if (oProps.fontName !== undefined) {
 														try { targetObj.SetFontFamily(oProps.fontName); } catch(e) {}
@@ -5176,6 +5186,7 @@ User Request:
 				log(`Error executing autonomous edits at step ${i}: ${err.message}`, 'error');
 				setStepperStep(3, "failed", err.message);
 				isEditingAutonomously = false;
+				lastInternalQueryTime = Date.now();
 				executeBtn.disabled = false;
 				proposedChanges = null;
 			}
