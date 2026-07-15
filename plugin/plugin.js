@@ -1216,7 +1216,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 	// Local Rule Engine rules per intent
 	const RULES = {
 		rewrite: {
-			instructions: "1. Focus ONLY on writing beautiful, professional, context-appropriate text.\n2. Do NOT change visual styling properties (bold, italic, font family) in this plan unless explicitly requested.\n3. Return a high-level action 'rewrite' for the paragraph indices to update.\n4. Output valid JSON in the Planner format."
+			instructions: "1. Focus on writing beautiful, professional, context-appropriate text.\n2. Do NOT change visual styling properties (bold, italic, font family) in this plan unless explicitly requested.\n3. Return a high-level action 'rewrite' for the paragraph indices to update.\n4. If inserting extra sections or adding new text blocks, specify 'create_paragraph' or 'paste_html' actions with matching styles or properties (bold for headings) to maintain layout consistency."
 		},
 		summarize: {
 			instructions: "1. Condense the text into 3 to 5 clear, high-quality, professional bullet points starting with standard dash '-' prefixes.\n2. Return a high-level action 'paste_html' or 'rewrite' with the summary bullets.\n3. Do not generate visual changes unless asked."
@@ -1225,13 +1225,13 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			instructions: "1. Translate the text into the target language with perfect grammatical accuracy.\n2. Keep paragraph structure identical. Do not alter styling.\n3. Return a 'rewrite' action for the paragraph indices."
 		},
 		format: {
-			instructions: "1. Focus ONLY on styling (fontName, fontSize, bold, italic, color, alignment, spacing, shading, lists, and indentation).\n2. Do NOT rewrite the text content of the paragraphs unless explicitly requested.\n3. Return 'change_font', 'change_color', 'make_list', 'change_indent', or 'table_action' high-level actions depending on styling or layout goals."
+			instructions: "1. Focus ONLY on styling (fontName, fontSize, bold, italic, color, alignment, spacing, shading, lists, and indentation).\n2. Do NOT rewrite the text content of the paragraphs unless explicitly requested.\n3. Return 'change_font', 'change_color', 'make_list', 'change_indent', or 'table_action' high-level actions depending on styling or layout goals.\n4. STYLE TEMPLATE GUIDELINES:\n   - CONFERENCE PAPER: Use Font: 'Times New Roman'. Title (first paragraph): 24pt, bold, center aligned. Section Headings (Introduction, History, etc.): 12pt or 14pt, bold, numbered (e.g. '1. Introduction'), spacing before 240 dxa, spacing after 120 dxa, left-aligned. Body Paragraphs: 10pt or 11pt, justify aligned, line spacing 1.0 or 1.15, first line indent 360 dxa (0.25 inch), spacing after 120 dxa.\n   - FORMAL LETTER: Font: 'Times New Roman' or 'Calibri'. Left aligned. Body paragraphs: 11pt, line spacing 1.15, spacing after 180 dxa, no indents.\n   - MODERN EXECUTIVE/REPORT: Font: 'Arial' or 'Calibri'. Headings: 14pt or 16pt, bold, Navy color ('#1e40af'), spacing before 300 dxa, spacing after 120 dxa. Body: 11pt, justify aligned, line spacing 1.15, spacing after 120 dxa."
 		},
 		create_document: {
 			instructions: "1. Generate a beautifully structured document, essay, report, or article using professional formatting rules.\n2. Heavily use 'paste_html' action with high-fidelity styled HTML strings.\n3. Create proper heading hierarchies (<h1 style='...'>, <h2 style='...'>, <p style='text-align:justify;'>)."
 		},
 		insert_content: {
-			instructions: "1. Insert new paragraphs or tables at the correct target index.\n2. Return 'create_paragraph', 'paste_html', or 'table_action' (subAction: 'create', 'add_row', 'add_column') high-level actions with proper text or parameters."
+			instructions: "1. Insert new paragraphs or tables at the correct target index.\n2. Return 'create_paragraph', 'paste_html', or 'table_action' (subAction: 'create', 'add_row', 'add_column') actions.\n3. To maintain layout consistency, always copy or match the formatting properties of the surrounding paragraphs (e.g., if inserting a body paragraph, use the body font/size; if inserting a heading, make it bold and larger)."
 		},
 		delete_content: {
 			instructions: "1. Remove targeted content, paragraphs, tables, or sections.\n2. Return 'delete_paragraph' or 'table_action' (subAction: 'delete_row', 'delete_column') high-level actions."
@@ -4066,6 +4066,15 @@ User Request:
 							var origColorHex = "#000000";
 							var origHighlight = "none";
 							
+							var origAlign = "left";
+							var origSpaceBefore = 0;
+							var origSpaceAfter = 0;
+							var origLineSpacing = 1.15;
+							var origIndLeft = 0;
+							var origIndRight = 0;
+							var origIndFirstLine = 0;
+							var origShading = null;
+							
 							var oRefParagraph = oDocument.GetElement(actualTargetIndex);
 							if (oRefParagraph) {
 								try {
@@ -4104,6 +4113,37 @@ User Request:
 											}
 										}
 									}
+									
+									if (oRefParagraph.GetParaPr) {
+										var pPr = oRefParagraph.GetParaPr();
+										if (pPr) {
+											if (pPr.GetJc) {
+												var jc = pPr.GetJc();
+												if (jc === "both" || jc === "justify") origAlign = "justify";
+												else if (jc) origAlign = jc;
+											}
+											if (pPr.GetSpacingBefore) origSpaceBefore = pPr.GetSpacingBefore() || 0;
+											if (pPr.GetSpacingAfter) origSpaceAfter = pPr.GetSpacingAfter() || 0;
+											if (pPr.GetSpacingLineValue) {
+												var lineVal = pPr.GetSpacingLineValue();
+												if (lineVal) {
+													var rule = pPr.GetSpacingLineRule ? pPr.GetSpacingLineRule() : "auto";
+													if (rule === "auto") origLineSpacing = lineVal / 240;
+													else origLineSpacing = lineVal / 20;
+												}
+											}
+											if (pPr.GetIndLeft) origIndLeft = pPr.GetIndLeft() || 0;
+											if (pPr.GetIndRight) origIndRight = pPr.GetIndRight() || 0;
+											if (pPr.GetIndFirstLine) origIndFirstLine = pPr.GetIndFirstLine() || 0;
+											if (pPr.GetShd) {
+												var sd = pPr.GetShd();
+												if (sd) {
+													if (typeof sd === "string") origShading = sd;
+													else if (sd.GetHex) origShading = sd.GetHex() || null;
+												}
+											}
+										}
+									}
 								} catch(e) {}
 							}
 							
@@ -4111,6 +4151,41 @@ User Request:
 							var oProps = change.properties || {};
 							try {
 								oDocument.AddElement(actualTargetIndex + 1, oNewParagraph);
+								
+								var oParaPr = oNewParagraph.GetParaPr();
+								if (oParaPr) {
+									var targetAlign = oProps.alignment !== undefined ? oProps.alignment : origAlign;
+									if (targetAlign === "justify") oParaPr.SetJc("both");
+									else if (targetAlign) oParaPr.SetJc(targetAlign);
+
+									var targetSpaceBefore = oProps.spacingBefore !== undefined ? Number(oProps.spacingBefore) : origSpaceBefore;
+									if (targetSpaceBefore !== null && targetSpaceBefore !== undefined) oParaPr.SetSpacingBefore(targetSpaceBefore);
+
+									var targetSpaceAfter = oProps.spacingAfter !== undefined ? Number(oProps.spacingAfter) : origSpaceAfter;
+									if (targetSpaceAfter !== null && targetSpaceAfter !== undefined) oParaPr.SetSpacingAfter(targetSpaceAfter);
+
+									var targetLineSpacing = oProps.lineSpacing !== undefined ? Number(oProps.lineSpacing) : origLineSpacing;
+									if (targetLineSpacing !== null && targetLineSpacing !== undefined) {
+										oParaPr.SetSpacingLine(Math.round(targetLineSpacing * 240), "auto");
+									}
+
+									var targetIndLeft = oProps.indLeft !== undefined ? Number(oProps.indLeft) : origIndLeft;
+									if (targetIndLeft !== null && targetIndLeft !== undefined) oParaPr.SetIndLeft(targetIndLeft);
+
+									var targetIndRight = oProps.indRight !== undefined ? Number(oProps.indRight) : origIndRight;
+									if (targetIndRight !== null && targetIndRight !== undefined) oParaPr.SetIndRight(targetIndRight);
+
+									var targetIndFirstLine = oProps.indFirstLine !== undefined ? Number(oProps.indFirstLine) : origIndFirstLine;
+									if (targetIndFirstLine !== null && targetIndFirstLine !== undefined) oParaPr.SetIndFirstLine(targetIndFirstLine);
+
+									var targetShd = oProps.shading !== undefined ? oProps.shading : origShading;
+									if (targetShd) {
+										var hex = String(targetShd).replace('#', '').trim();
+										if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+											try { oParaPr.SetShd("clear", Api.CreateColorFromRGB(parseInt(hex.substring(0, 2), 16), parseInt(hex.substring(2, 4), 16), parseInt(hex.substring(4, 6), 16))); } catch(e) {}
+										}
+									}
+								}
 								
 								if (oProps.newText) {
 									parseAndApplyTextWithTags(oNewParagraph, oProps.newText, origFont, origSize, origBold, origItalic, origUnderline, origStrikeout, origColorHex, origHighlight, oProps);
@@ -4129,16 +4204,6 @@ User Request:
 											oLevel.SetCustomType(style, formatString, "left");
 											oNewParagraph.SetNumbering(oLevel);
 										}
-									}
-								}
-								
-								// Apply indents directly if specified in properties
-								if (oProps.indLeft !== undefined || oProps.indRight !== undefined || oProps.indFirstLine !== undefined) {
-									var oParaPr = oNewParagraph.GetParaPr();
-									if (oParaPr) {
-										if (oProps.indLeft !== undefined) oParaPr.SetIndLeft(Number(oProps.indLeft));
-										if (oProps.indRight !== undefined) oParaPr.SetIndRight(Number(oProps.indRight));
-										if (oProps.indFirstLine !== undefined) oParaPr.SetIndFirstLine(Number(oProps.indFirstLine));
 									}
 								}
 							} catch(e) {}
