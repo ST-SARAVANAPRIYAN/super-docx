@@ -33,6 +33,7 @@
 	const contextToolbar = document.getElementById('context-toolbar');
 	let appliedChangesCount = 0;
 	let currentChatProposal = null;
+	let isInternalQuery = false;
 
 	// Undo / Redo selectors
 	const toolbarUndo = document.getElementById('toolbar-undo');
@@ -114,7 +115,14 @@
 
 	// Render Proposed Changes Inline
 	function renderChatPreview(aiMessageBody, changes, applied = false) {
-		aiMessageBody.innerHTML = '';
+		let previewContainer = aiMessageBody.querySelector('.chat-preview-container');
+		if (!previewContainer) {
+			previewContainer = document.createElement('div');
+			previewContainer.className = 'chat-preview-container';
+			aiMessageBody.appendChild(previewContainer);
+		} else {
+			previewContainer.innerHTML = '';
+		}
 		
 		const wrapper = document.createElement('div');
 		wrapper.style.display = 'flex';
@@ -130,19 +138,20 @@
 		wrapper.appendChild(title);
 		
 		const changesListDiv = document.createElement('div');
-		changesListDiv.style.maxHeight = '145px';
+		changesListDiv.style.maxHeight = '110px';
 		changesListDiv.style.overflowY = 'auto';
 		changesListDiv.style.display = 'flex';
 		changesListDiv.style.flexDirection = 'column';
-		changesListDiv.style.gap = '8px';
-		changesListDiv.style.padding = '10px';
-		changesListDiv.style.background = 'var(--bg-base)';
-		changesListDiv.style.border = '1px solid var(--border-color)';
-		changesListDiv.style.borderRadius = '8px';
+		changesListDiv.style.gap = '6px';
+		changesListDiv.style.padding = '8px 10px';
+		changesListDiv.style.background = 'var(--bg-sidebar)';
+		changesListDiv.style.border = '1px solid rgba(0, 0, 0, 0.06)';
+		changesListDiv.style.borderRadius = '6px';
 		
 		changes.forEach((change) => {
 			const original = findElementByIndex(change.targetIndex);
-			if (!original && change.action !== 'createParagraph') return;
+			const isCreation = change.action === 'createParagraph' || change.action === 'create_paragraph' || change.action === 'pasteHTML' || change.action === 'paste_html';
+			if (!original && !isCreation) return;
 			
 			const item = document.createElement('div');
 			item.style.padding = '0 0 8px 0';
@@ -151,15 +160,15 @@
 			item.style.borderRadius = '0';
 			item.style.fontSize = '10px';
 			if (changes.indexOf(change) < changes.length - 1) {
-				item.style.borderBottom = '1px solid var(--border-color)';
+				item.style.borderBottom = '1px solid rgba(0, 0, 0, 0.05)';
 			}
 			
 			let actionBadge = '';
-			if (change.action === 'createParagraph') {
+			if (change.action === 'createParagraph' || change.action === 'create_paragraph') {
 				actionBadge = '<span class="badge-action action-create" style="font-size: 8px;">Create</span>';
-			} else if (change.action === 'deleteParagraph') {
+			} else if (change.action === 'deleteParagraph' || change.action === 'delete_paragraph') {
 				actionBadge = '<span class="badge-action action-delete" style="font-size: 8px;">Delete</span>';
-			} else if (change.action === 'pasteHTML') {
+			} else if (change.action === 'pasteHTML' || change.action === 'paste_html') {
 				actionBadge = '<span class="badge-action action-generate" style="font-size: 8px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);">Generate</span>';
 			} else {
 				actionBadge = '<span class="badge-action action-modify" style="font-size: 8px;">Modify</span>';
@@ -176,11 +185,11 @@
 			const originalText = original ? (original.text || `[Table Element at #${change.targetIndex}]`) : '';
 			
 			let diffHTML = '';
-			if (change.action === 'deleteParagraph') {
+			if (change.action === 'deleteParagraph' || change.action === 'delete_paragraph') {
 				diffHTML = `<div class="diff-original" style="font-size: 9.5px; color: var(--error); text-decoration: line-through;">- "${originalText.substring(0, 50)}${originalText.length > 50 ? '...' : ''}"</div>`;
-			} else if (change.action === 'createParagraph') {
+			} else if (change.action === 'createParagraph' || change.action === 'create_paragraph') {
 				diffHTML = `<div class="diff-new" style="font-size: 9.5px; color: var(--success);">+ "${(props.newText || '').substring(0, 50)}"</div>`;
-			} else if (change.action === 'pasteHTML') {
+			} else if (change.action === 'pasteHTML' || change.action === 'paste_html') {
 				diffHTML = `<div class="diff-new" style="font-size: 9.5px; color: #8b5cf6;">✨ Generated Content</div>`;
 			} else {
 				if (props.newText !== undefined && props.newText !== originalText) {
@@ -206,7 +215,7 @@
 		
 		wrapper.appendChild(changesListDiv);
 		
-		aiMessageBody.appendChild(wrapper);
+		previewContainer.appendChild(wrapper);
 		
 		if (applied) {
 			const revertBtn = document.createElement('button');
@@ -345,6 +354,7 @@
 	// Detect selection type and active properties
 	function detectSelectionType() {
 		return new Promise((resolve) => {
+			isInternalQuery = true;
 			window.Asc.plugin.callCommand(function() {
 				var result = { type: "text", properties: {} };
 				try {
@@ -438,6 +448,7 @@
 			}, false, true, function(result) {
 				if (!result || result.type === "none") {
 					window.Asc.plugin.executeMethod("GetSelectionType", [], function(type) {
+						isInternalQuery = false;
 						if (type === "drawing") {
 							resolve({ type: "image", properties: {} });
 						} else {
@@ -445,6 +456,7 @@
 						}
 					});
 				} else {
+					isInternalQuery = false;
 					resolve(result);
 				}
 			});
@@ -1712,6 +1724,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		}
 		structureJson.value = "Scanning active document structure JSON...";
 		try {
+			isInternalQuery = true;
 			const docJSON = await serializeActiveContent();
 			const parsed = parseSerializedData(docJSON);
 			structureJson.value = JSON.stringify(parsed, null, 2);
@@ -1743,6 +1756,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 			log("Error loading structure: " + err.message, "error");
 		} finally {
 			isScanning = false;
+			isInternalQuery = false;
 			if (outlineTreeContainer) {
 				outlineTreeContainer.classList.remove('scanning-refreshed');
 			}
@@ -1905,6 +1919,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		if (!cachedDocData || !cachedDocData.sections) return null;
 		for (var s = 0; s < cachedDocData.sections.length; s++) {
 			var elements = cachedDocData.sections[s].elements;
+			if (!elements) continue;
 			for (var e = 0; e < elements.length; e++) {
 				if (elements[e].index === index) {
 					return elements[e];
@@ -1960,7 +1975,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 		// Attach to selection change event to dynamically update the JSON structure view instantly!
 		try {
 			window.Asc.plugin.attachEvent("onSelectionChanged", function() {
-				if (!isEditingAutonomously) {
+				if (!isEditingAutonomously && !isInternalQuery) {
 					debouncedRefresh();
 				}
 			});
@@ -1970,7 +1985,7 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 		try {
 			window.Asc.plugin.attachEvent("onTargetPositionChanged", function() {
-				if (!isEditingAutonomously) {
+				if (!isEditingAutonomously && !isInternalQuery) {
 					debouncedRefresh();
 				}
 			});
@@ -1984,12 +1999,12 @@ ${JSON.stringify(lastExecutionDebugData.parsedPlans || [], null, 2)}
 
 	// Fallback direct event assignments on the plugin object
 	window.Asc.plugin.event_onSelectionChanged = function() {
-		if (!isEditingAutonomously) {
+		if (!isEditingAutonomously && !isInternalQuery) {
 			debouncedRefresh();
 		}
 	};
 	window.Asc.plugin.event_onTargetPositionChanged = function() {
-		if (!isEditingAutonomously) {
+		if (!isEditingAutonomously && !isInternalQuery) {
 			debouncedRefresh();
 		}
 	};
