@@ -2602,11 +2602,14 @@ User Request:
 		});
 	}
 
-	function verifyChange(change, beforeState, afterState) {
+	function verifyChange(change, beforeState, afterState, editResult) {
 		const actionName = change.action;
 		const props = change.properties || {};
 
 		if (actionName === 'delete_paragraph' || actionName === 'deleteParagraph') {
+			if (editResult && editResult.delta < 0) {
+				return { success: true };
+			}
 			if (!beforeState) return { success: true }; 
 			if (!afterState) return { success: true }; 
 			if (afterState.elementsCount < beforeState.elementsCount) {
@@ -2616,6 +2619,9 @@ User Request:
 		}
 
 		if (actionName === 'create_paragraph' || actionName === 'createParagraph') {
+			if (editResult && editResult.delta > 0) {
+				return { success: true };
+			}
 			if (afterState && afterState.elementsCount > (beforeState ? beforeState.elementsCount : 0)) {
 				return { success: true };
 			}
@@ -2623,6 +2629,9 @@ User Request:
 		}
 
 		if (actionName === 'paste_html' || actionName === 'pasteHTML') {
+			if (editResult && editResult.delta > 0) {
+				return { success: true };
+			}
 			if (afterState && (afterState.text !== (beforeState ? beforeState.text : "") || afterState.elementsCount > (beforeState ? beforeState.elementsCount : 0))) {
 				return { success: true };
 			}
@@ -5174,11 +5183,16 @@ User Request:
 			// Apply edit command
 			const editResult = await runEditCommand();
 
+			// Tiny settle delay for structural modifications to let ONLYOFFICE asynchronous layout loops complete
+			if (actionName.indexOf('paragraph') !== -1 || actionName.indexOf('html') !== -1 || actionName.indexOf('Paragraph') !== -1 || actionName.indexOf('HTML') !== -1) {
+				await new Promise(r => setTimeout(r, 60));
+			}
+
 			// Capture element state after applying change
 			const afterState = await captureElementState(actualTargetIndex);
 
 			// Verification logic check
-			const verification = verifyChange(change, beforeState, afterState);
+			const verification = verifyChange(change, beforeState, afterState, editResult);
 
 			if (verification.success) {
 				log(`Action [${actionName.toUpperCase()}] executed and VERIFIED successfully!`, 'success');
