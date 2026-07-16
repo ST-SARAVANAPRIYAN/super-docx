@@ -5029,81 +5029,88 @@ User Request:
 											var runCount = oParagraph.GetElementsCount();
 											for (var r = 0; r < runCount; r++) {
 												var oRun = oParagraph.GetElement(r);
-												if (oRun && (oRun.GetClassType() === "run" || typeof oRun.SetUnderline === "function")) {
-													var targetObj = oRun;
-													if (oProps.fontName !== undefined) {
-														try { targetObj.SetFontFamily(oProps.fontName); } catch(e) {}
-														try { targetObj.SetFontName(oProps.fontName); } catch(e) {}
+												if (oRun && (oRun.GetClassType() === "run" || typeof oRun.GetTextPr === "function")) {
+													var targetObj = null;
+													try { targetObj = oRun.GetTextPr(); } catch(e) {}
+													if (!targetObj) {
+														try { targetObj = Api.CreateTextPr(); } catch(e) {}
 													}
-													if (oProps.fontSize !== undefined) {
-														try { targetObj.SetFontSize(oProps.fontSize); } catch(e) {}
-													}
-													if (oProps.bold !== undefined) {
-														try { targetObj.SetBold(!!oProps.bold); } catch(e) {}
-													}
-													if (oProps.italic !== undefined) {
-														try { targetObj.SetItalic(!!oProps.italic); } catch(e) {}
-													}
-													if (oProps.underline !== undefined) {
-														try { targetObj.SetUnderline(!!oProps.underline); } catch(e) {}
-													}
-													if (oProps.strikeout !== undefined) {
-														try { targetObj.SetStrikeout(!!oProps.strikeout); } catch(e) {}
-													}
-													if (oProps.doubleStrikeout !== undefined) {
-														try { targetObj.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
-													}
-													if (oProps.smallCaps !== undefined) {
-														try { targetObj.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
-													}
-													if (oProps.caps !== undefined) {
-														try { targetObj.SetCaps(!!oProps.caps); } catch(e) {}
-													}
-													if (oProps.subscript !== undefined) {
-														try { targetObj.SetSubscript(!!oProps.subscript); } catch(e) {}
-													}
-													if (oProps.superscript !== undefined) {
-														try { targetObj.SetSuperscript(!!oProps.superscript); } catch(e) {}
-													}
-													if (oProps.characterSpacing !== undefined) {
-														try { targetObj.SetSpacing(oProps.characterSpacing); } catch(e) {}
-													}
-													if (oProps.highlight !== undefined) {
-														try {
-															var hl = oProps.highlight.toLowerCase().trim();
-															if (hl === "none" || hl === "null" || hl === "default") targetObj.SetHighlight("none");
-															else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") targetObj.SetHighlight("yellow");
-															else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") targetObj.SetHighlight("green");
-															else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") targetObj.SetHighlight("blue");
-															else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") targetObj.SetHighlight("cyan");
-															else if (hl.indexOf("red") !== -1 || hl === "#ff0000") targetObj.SetHighlight("red");
-															else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") targetObj.SetHighlight("magenta");
-															else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") targetObj.SetHighlight("lightGray");
-															else targetObj.SetHighlight(hl);
-														} catch(eHighlight) {}
-													}
-													if (oProps.color !== undefined) {
-														try {
-															var hex = String(oProps.color).replace('#', '').trim();
-															if (/^[0-9a-fA-F]{6}$/.test(hex)) {
-																var red = parseInt(hex.substring(0, 2), 16);
-																var green = parseInt(hex.substring(2, 4), 16);
-																var blue = parseInt(hex.substring(4, 6), 16);
-																try { targetObj.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
-																	try { targetObj.SetColor(red, green, blue); } catch(errHex) {}
+													if (targetObj) {
+														if (oProps.fontName !== undefined) {
+															try { targetObj.SetFontFamily(oProps.fontName); } catch(e) {}
+															try { targetObj.SetFontName(oProps.fontName); } catch(e) {}
+														}
+														if (oProps.fontSize !== undefined) {
+															try { targetObj.SetFontSize(oProps.fontSize); } catch(e) {}
+														}
+														if (oProps.bold !== undefined) {
+															try { targetObj.SetBold(!!oProps.bold); } catch(e) {}
+														}
+														if (oProps.italic !== undefined) {
+															try { targetObj.SetItalic(!!oProps.italic); } catch(e) {}
+														}
+														if (oProps.underline !== undefined) {
+															try { targetObj.SetUnderline(!!oProps.underline); } catch(e) {}
+														}
+														if (oProps.strikeout !== undefined) {
+															try { targetObj.SetStrikeout(!!oProps.strikeout); } catch(e) {}
+														}
+														if (oProps.doubleStrikeout !== undefined) {
+															try { targetObj.SetDoubleStrikeout(!!oProps.doubleStrikeout); } catch(e) {}
+														}
+														if (oProps.smallCaps !== undefined) {
+															try { targetObj.SetSmallCaps(!!oProps.smallCaps); } catch(e) {}
+														}
+														if (oProps.caps !== undefined) {
+															try { targetObj.SetCaps(!!oProps.caps); } catch(e) {}
+														}
+														if (oProps.subscript !== undefined) {
+															try { targetObj.SetSubscript(!!oProps.subscript); } catch(e) {}
+														}
+														if (oProps.superscript !== undefined) {
+															try { targetObj.SetSuperscript(!!oProps.superscript); } catch(e) {}
+														}
+														if (oProps.characterSpacing !== undefined) {
+															try { targetObj.SetSpacing(oProps.characterSpacing); } catch(e) {}
+														}
+														if (oProps.highlight !== undefined) {
+															try {
+																var hl = oProps.highlight.toLowerCase().trim();
+																if (hl === "none" || hl === "null" || hl === "default") targetObj.SetHighlight("none");
+																else if (hl.indexOf("yellow") !== -1 || hl === "#ffff00") targetObj.SetHighlight("yellow");
+																else if (hl.indexOf("green") !== -1 || hl === "#00ff00" || hl === "#008000") targetObj.SetHighlight("green");
+																else if (hl.indexOf("blue") !== -1 || hl === "#0000ff") targetObj.SetHighlight("blue");
+																else if (hl.indexOf("cyan") !== -1 || hl.indexOf("aqua") !== -1 || hl === "#00ffff") targetObj.SetHighlight("cyan");
+																else if (hl.indexOf("red") !== -1 || hl === "#ff0000") targetObj.SetHighlight("red");
+																else if (hl.indexOf("magenta") !== -1 || hl.indexOf("pink") !== -1 || hl === "#ff00ff") targetObj.SetHighlight("magenta");
+																else if (hl.indexOf("gray") !== -1 || hl.indexOf("grey") !== -1 || hl === "#808080") targetObj.SetHighlight("lightGray");
+																else targetObj.SetHighlight(hl);
+															} catch(eHighlight) {}
+														}
+														if (oProps.color !== undefined) {
+															try {
+																var hex = String(oProps.color).replace('#', '').trim();
+																if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+																	var red = parseInt(hex.substring(0, 2), 16);
+																	var green = parseInt(hex.substring(2, 4), 16);
+																	var blue = parseInt(hex.substring(4, 6), 16);
+																	try { targetObj.SetColor(Api.CreateColorFromRGB(red, green, blue)); } catch(eColor) {
+																		try { targetObj.SetColor(red, green, blue); } catch(errHex) {}
+																	}
+																} else {
+																	var namedColors = {
+																		"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
+																		"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
+																		"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
+																	};
+																	if (namedColors[hex.toLowerCase()]) {
+																		var rgb = namedColors[hex.toLowerCase()];
+																		targetObj.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
+																	}
 																}
-															} else {
-																var namedColors = {
-																	"red": [255, 0, 0], "green": [0, 128, 0], "blue": [0, 0, 255],
-																	"yellow": [255, 255, 0], "black": [0, 0, 0], "white": [255, 255, 255],
-																	"gray": [128, 128, 128], "purple": [128, 0, 128], "orange": [255, 165, 0]
-																};
-																if (namedColors[hex.toLowerCase()]) {
-																	var rgb = namedColors[hex.toLowerCase()];
-																	targetObj.SetColor(Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]));
-																}
-															}
-														} catch(eColorOuter) {}
+															} catch(eColorOuter) {}
+														}
+														try { oRun.SetTextPr(targetObj); } catch(e) {}
 													}
 												}
 											}
