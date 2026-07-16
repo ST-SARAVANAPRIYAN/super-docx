@@ -3787,7 +3787,7 @@ User Request:
 		}
 
 		let i = 0;
-		let indexOffset = 0; // Dynamic tracking of index drift caused by creations, deletions, and Pastes
+		let modifications = []; // Track modifications history for position-dependent index shift
 		let retryCount = 0;
 		const maxRetries = 3;
 		
@@ -3820,7 +3820,15 @@ User Request:
 			const change = changes[i];
 			const actionName = change.action || 'rewrite';
 			const targetIndex = change.targetIndex;
-			const actualTargetIndex = targetIndex + indexOffset;
+			
+			// Dynamically calculate shift based on previous modifications that occurred before the target index
+			let shift = 0;
+			for (const mod of modifications) {
+				if (targetIndex > mod.targetIndex) {
+					shift += mod.delta;
+				}
+			}
+			const actualTargetIndex = targetIndex + shift;
 
 			log(`Applying action [${actionName.toUpperCase()}] to element #${targetIndex + 1} (actual index #${actualTargetIndex + 1}). Attempt ${retryCount + 1}/${maxRetries}...`, 'info');
 
@@ -5208,7 +5216,12 @@ User Request:
 				});
 				if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
-				indexOffset += editResult.delta;
+				modifications.push({
+					action: actionName,
+					targetIndex: targetIndex,
+					actualTargetIndex: actualTargetIndex,
+					delta: editResult.delta
+				});
 				retryCount = 0; 
 				i++;
 				setTimeout(applyNext, 300);
@@ -5232,7 +5245,12 @@ User Request:
 					});
 					if (typeof updateDebugViewer === 'function') updateDebugViewer();
 
-					indexOffset += editResult.delta;
+					modifications.push({
+						action: actionName,
+						targetIndex: targetIndex,
+						actualTargetIndex: actualTargetIndex,
+						delta: editResult.delta
+					});
 					retryCount = 0; 
 					i++;
 					setTimeout(applyNext, 300);
